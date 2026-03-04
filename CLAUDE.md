@@ -57,11 +57,21 @@ Design tokens live in `expo/theme/colors.ts` and `expo/theme/fonts.ts`.
 
 ## Environment Variables
 
+All six are required — the app throws on startup if any are missing.
+
 ```
-CONTENT_API_KEY      # Content search API (currently OMDb — 1,000 req/day free)
-STREAMING_API_KEY    # Streaming availability API (currently RapidAPI — 100 req/day)
-LLM_API_KEY          # LLM API (currently Anthropic Claude Sonnet)
+LLM_API_KEY          # LLM API key
+CONTENT_API_KEY      # Content search API key
+CONTENT_API_BASE     # Content search API base URL (e.g. https://www.omdbapi.com)
+STREAMING_API_KEY    # Streaming availability API key
+STREAMING_API_BASE   # Streaming availability API base URL (e.g. https://streaming-availability.p.rapidapi.com)
 ```
+
+Note: the streaming API host header is derived automatically from `STREAMING_API_BASE` — no separate var needed.
+
+## Workflow
+
+Always run a sub-agent code review before any `git commit` or `git push`. The review agent should check for TypeScript correctness, logic errors, API integration issues, and consistency across changed files. Apply any critical/high fixes before committing. Skip style suggestions and TODOs deferred to later phases.
 
 ## Build Phases
 

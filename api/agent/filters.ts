@@ -1,5 +1,5 @@
-// Builds SearchContent input filters from the user's message + clarification answers
-// TODO: Phase 4 — replace keyword extraction with Claude-assisted parsing
+// Builds SearchContent input filters from the user's message + clarification answers.
+// TODO: Phase 5 — replace basic keyword extraction with Claude-assisted intent parsing.
 
 import type { SearchContentInput } from './tools/searchContent';
 
@@ -29,5 +29,5 @@ export function buildSearchFilters(
     ratingAnswer === 'G' ? 'G' :
     undefined;
 
-  return { type, runtimeMin, runtimeMax, certification };
+  return { keyword: message.trim(), type, runtimeMin, runtimeMax, certification };
 }
