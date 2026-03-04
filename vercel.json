@@ -1,0 +1,14 @@
+{
+  "buildCommand": "expo export --platform web",
+  "outputDirectory": "dist",
+  "framework": null,
+  "functions": {
+    "api/**/*.ts": {
+      "runtime": "@vercel/node"
+    }
+  },
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/(.*)", "dest": "/$1" }
+  ]
+}
