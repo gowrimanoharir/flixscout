@@ -3,12 +3,9 @@
 // Native: AsyncStorage key 'flixscout_session'
 // Stores full message history, loads on app start
 
-export interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: number;
-}
+import type { Message } from '../../shared/types';
+
+export type { Message };
 
 export function useSession() {
   return {

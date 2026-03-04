@@ -3,6 +3,7 @@
 // Titles with no availability are silently filtered — never returned to the user
 
 import { z } from 'zod';
+import type { AvailableTitle } from '../../../shared/types';
 
 export const checkAvailabilitySchema = z.object({
   imdbIds: z.array(z.string()).describe('IMDb IDs from OMDb results'),
@@ -11,15 +12,7 @@ export const checkAvailabilitySchema = z.object({
 });
 
 export type CheckAvailabilityInput = z.infer<typeof checkAvailabilitySchema>;
-
-export interface AvailableTitle {
-  imdbId: string;
-  title: string;
-  platform: string;
-  streamUrl: string;
-  audioLanguages: string[];
-  videoQuality: string;
-}
+export type { AvailableTitle };
 
 export async function checkAvailability(
   _input: CheckAvailabilityInput

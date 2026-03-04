@@ -4,17 +4,13 @@
 // Questions target: platforms, region, mood/genre, runtime, content rating
 
 import { z } from 'zod';
+import type { ClarificationQuestion } from '../../../shared/types';
 
 export const askClarificationSchema = z.object({
   prompt: z.string().describe('The user prompt to generate clarifying questions for'),
 });
 
 export type AskClarificationInput = z.infer<typeof askClarificationSchema>;
-
-export interface ClarificationQuestion {
-  question: string;
-  options: string[];
-}
 
 export interface AskClarificationOutput {
   questions: ClarificationQuestion[];

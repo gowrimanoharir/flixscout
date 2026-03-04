@@ -17,14 +17,17 @@
         "expo/theme/*"
       ],
       "@/agent/*": [
-        "agent/*"
+        "api/agent/*"
+      ],
+      "@/shared/*": [
+        "shared/*"
       ]
     }
   },
   "include": [
     "expo/**/*",
     "api/**/*",
-    "agent/**/*",
+    "shared/**/*",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
   ]
