@@ -4,7 +4,8 @@
 
 // ── Font families ─────────────────────────────────────────────────────────
 export const fontFamily = {
-  heading: 'Syne_800ExtraBold',   // Syne 800 — logo, card titles, empty state heading
+  logo:    'Syne_800ExtraBold',   // Syne 800 — nav logo wordmark only
+  heading: 'Syne_700Bold',        // Syne 700 — empty state title, card titles
   body:    'DMSans_400Regular',   // DM Sans 400 — all body copy, bubbles, metadata
   bodyMed: 'DMSans_500Medium',    // DM Sans 500 — chips, nav badge
   bodySemi:'DMSans_600SemiBold',  // DM Sans 600 — continue button, watch button label

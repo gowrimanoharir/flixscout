@@ -77,12 +77,14 @@ Always run a sub-agent code review before any `git commit` or `git push`. The re
 
 Build phases in order — do not skip ahead without confirmation:
 
-1. **Project scaffold** ← current
-2. Design tokens extraction
-3. BFF API route + LangChain setup
-4. Agent tools (one at a time)
+1. ✅ Project scaffold
+2. ✅ Design tokens extraction
+3. ✅ BFF API route + LangChain setup
+4. ✅ Agent tools
 5. System prompt
-6. Chat UI + all components
+6a. Deps + fonts + screen shell + empty state
+6b. Input + useAgent streaming hook + real LLM (guardrail blocked message + clarification chips)
+6c. Search + availability APIs connected — RecommendationCard + no-results + PlatformSelector + loading shimmer
 7. Session persistence
 8. Guardrail tests
-9. Vercel deployment config
+9. Vercel deployment config + README
