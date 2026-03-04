@@ -1,4 +1,4 @@
-// TODO: Phase 4 — SearchContent tool (OMDb API)
+// TODO: Phase 4 — SearchContent tool (content search API — env: CONTENT_API_KEY)
 // OMDb search endpoint: omdbapi.com/?s=<keyword>
 // Construct keyword from intent (e.g. "French thriller"), post-filter by year/rating/type
 // Always include_adult=false. Returns top 10 with IMDb IDs.

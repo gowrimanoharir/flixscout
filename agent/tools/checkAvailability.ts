@@ -1,4 +1,4 @@
-// TODO: Phase 4 — CheckAvailability tool (Streaming Availability API via RapidAPI)
+// TODO: Phase 4 — CheckAvailability tool (streaming availability API — env: STREAMING_API_KEY)
 // Confirms which OMDb titles are streamable on user's platforms in their country
 // Titles with no availability are silently filtered — never returned to the user
 

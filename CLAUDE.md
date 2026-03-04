@@ -58,9 +58,9 @@ Design tokens live in `expo/theme/colors.ts` and `expo/theme/fonts.ts`.
 ## Environment Variables
 
 ```
-OMDB_API_KEY         # OMDb — 1,000 req/day free
-RAPIDAPI_KEY         # Streaming Availability API — 100 req/day
-ANTHROPIC_API_KEY    # Claude Sonnet
+CONTENT_API_KEY      # Content search API (currently OMDb — 1,000 req/day free)
+STREAMING_API_KEY    # Streaming availability API (currently RapidAPI — 100 req/day)
+LLM_API_KEY          # LLM API (currently Anthropic Claude Sonnet)
 ```
 
 ## Build Phases
