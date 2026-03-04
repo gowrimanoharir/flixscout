@@ -38,6 +38,9 @@
     "jest-expo": "~51.0.0",
     "typescript": "^5.3.0"
   },
+  "engines": {
+    "node": "22.x"
+  },
   "jest": {
     "preset": "jest-expo"
   }
