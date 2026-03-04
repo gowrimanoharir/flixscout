@@ -10,6 +10,9 @@
       "@/hooks/*": [
         "expo/hooks/*"
       ],
+      "@/theme": [
+        "expo/theme/index"
+      ],
       "@/theme/*": [
         "expo/theme/*"
       ],

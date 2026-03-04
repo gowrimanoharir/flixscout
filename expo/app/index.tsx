@@ -3,7 +3,7 @@
 // Design reference: flixscout-final.html
 
 import { View, Text, StyleSheet } from 'react-native';
-import { colors } from '../theme/colors';
+import { colors } from '@/theme';
 
 export default function HomeScreen() {
   return (
