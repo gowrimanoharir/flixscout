@@ -65,7 +65,7 @@ export async function runOrchestrator(
     // Sequential: availability check needs the IMDb IDs from the search first
     emit(res, { type: 'status', payload: 'Searching for content…' });
 
-    const filters = buildSearchFilters(message, clarificationAnswers);
+    const filters = await buildSearchFilters(message, clarificationAnswers);
     const results = await searchContent(filters);
 
     if (!results.length) {
