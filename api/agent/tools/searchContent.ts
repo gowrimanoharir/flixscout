@@ -41,13 +41,26 @@ async function fetchOmdb(params: Record<string, string>): Promise<Record<string,
   if (!base) throw new Error('CONTENT_API_BASE environment variable is required');
   const url = new URL(base);
   url.searchParams.set('apikey', apiKey);
+
+  // Some OMDb plans require a fixed `i` identifier sent with every request.
+  // Detail lookups pass i=imdbID in params, which will override this below.
+  const iKey = process.env.CONTENT_API_IKEY;
+  if (iKey) url.searchParams.set('i', iKey);
+
+  // Apply caller params (i=imdbID for detail calls overrides CONTENT_API_IKEY)
   for (const [k, v] of Object.entries(params)) {
     url.searchParams.set(k, v);
   }
 
+  // Debug: log URL with key masked
+  const debugUrl = url.toString().replace(apiKey, '***');
+  console.log('[OMDb] →', debugUrl);
+
   const res = await fetch(url.toString());
   if (!res.ok) throw new Error(`OMDb API error: ${res.status}`);
-  return res.json() as Promise<Record<string, unknown>>;
+  const data = await res.json() as Record<string, unknown>;
+  console.log('[OMDb] ←', JSON.stringify(data).slice(0, 600));
+  return data;
 }
 
 function passesFilters(d: Record<string, unknown>, input: SearchContentInput): boolean {
@@ -75,10 +88,12 @@ export async function searchContent(
   input: SearchContentInput
 ): Promise<ContentResult[]> {
   const omdbType = input.type === 'tv' ? 'series' : 'movie';
+  console.log('[OMDb] searching keyword:', input.keyword, '| type:', omdbType);
 
   const searchData = await fetchOmdb({ s: input.keyword, type: omdbType });
 
   if (searchData['Response'] === 'False' || !Array.isArray(searchData['Search'])) {
+    console.log('[OMDb] search returned no results. Error:', searchData['Error'] ?? 'none');
     return [];
   }
 

@@ -34,6 +34,7 @@ async function fetchAvailability(
   const host = new URL(base).hostname;
   const url = `${base}/shows/${imdbId}?country=${country.toLowerCase()}`;
 
+  console.log('[Streaming] →', url);
   const res = await fetch(url, {
     headers: {
       'X-RapidAPI-Key': apiKey,
@@ -41,9 +42,14 @@ async function fetchAvailability(
     },
   });
 
-  if (res.status === 404) return null;
+  if (res.status === 404) {
+    console.log('[Streaming] ← 404 not found:', imdbId);
+    return null;
+  }
   if (!res.ok) throw new Error(`Streaming API error: ${res.status}`);
-  return res.json() as Promise<Record<string, unknown>>;
+  const data = await res.json() as Record<string, unknown>;
+  console.log('[Streaming] ←', imdbId, JSON.stringify(data).slice(0, 600));
+  return data;
 }
 
 function extractOptions(
@@ -77,6 +83,7 @@ export async function checkAvailability(
   if (!apiKey) throw new Error('STREAMING_API_KEY environment variable is required');
 
   const { imdbIds, country, platforms } = input;
+  console.log('[Streaming] checking', imdbIds.length, 'titles | country:', country, '| platforms:', platforms);
 
   const results = await Promise.all(
     imdbIds.map((id) => fetchAvailability(id, country, apiKey).catch(() => null))
