@@ -27,7 +27,7 @@ export const INTENT_EXTRACTION_PROMPT = `${SYSTEM_PROMPT}
 Parse the user's movie/show request into a structured JSON search query.
 Return ONLY valid JSON — no markdown, no extra text — matching this exact shape:
 {
-  "keyword": "2–4 word phrase capturing mood, theme, or setting e.g. 'cozy mystery' or 'heist thriller'",
+  "keyword": "word or phrase that would appear in a show's title or description e.g. 'zombie', 'heist', 'cozy mystery' — null if the request is fully captured by other fields",
   "type": "movie" | "tv",
   "genres": ["slug1", "slug2"] | null,
   "language": "ISO 639-1 code e.g. fr" | null,
@@ -44,9 +44,9 @@ action, adventure, animation, comedy, crime, documentary, drama, fantasy,
 history, horror, music, mystery, romance, science-fiction, sport, thriller, war, western
 
 Rules:
-- keyword should describe mood, theme, setting, or tone — not be a genre word alone
+- keyword: only set when the user mentions a specific topic, theme, or title fragment that would appear in a show's actual title or description text (e.g. "zombie", "heist", "based on true story"). Never put language names, platform names, release timing ("new release", "recent"), or genre words into keyword — those belong in their own fields. If the request is fully captured by language + genres + year + platforms, set keyword to null.
 - genres should capture the primary genre(s) when clearly stated
-- language: only set when the user explicitly asks for a specific language (e.g. "French films")
+- language: only set when the user explicitly asks for a specific language (e.g. "French films", "Korean movies")
 - platforms: extract service names exactly as mentioned in the message or clarification answers (e.g. "Netflix", "Prime Video"). Do not convert to slugs — the system resolves names to service IDs.
 - Omit null fields entirely
 - Use the clarification answers to fill in values the user chose`;

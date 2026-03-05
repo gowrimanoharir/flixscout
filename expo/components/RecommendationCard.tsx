@@ -9,6 +9,7 @@ interface Props {
 
 export function RecommendationCard({ title }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [needsToggle, setNeedsToggle] = useState(false);
 
   const metaParts = [
     title.year,
@@ -59,14 +60,29 @@ export function RecommendationCard({ title }: Props) {
 
       {/* Synopsis */}
       {title.overview ? (
-        <TouchableOpacity onPress={() => setExpanded(e => !e)} activeOpacity={0.7}>
-          <Text style={styles.overview} numberOfLines={expanded ? undefined : 2}>
+        <View>
+          {/* Hidden full-text layer used only to measure actual line count */}
+          <View style={styles.measureHidden} pointerEvents="none">
+            <Text
+              style={styles.overview}
+              onTextLayout={e => {
+                if (!needsToggle && e.nativeEvent.lines.length > 2) setNeedsToggle(true);
+              }}
+            >
+              {title.overview}
+            </Text>
+          </View>
+          <Text style={styles.overview} numberOfLines={expanded ? 0 : 2}>
             {title.overview}
           </Text>
-          <Text style={styles.expandToggle}>
-            {expanded ? 'Show less ↑' : 'Show more ↓'}
-          </Text>
-        </TouchableOpacity>
+          {needsToggle && (
+            <TouchableOpacity onPress={() => setExpanded(e => !e)} activeOpacity={0.7}>
+              <Text style={styles.expandToggle}>
+                {expanded ? 'Show less ↑' : 'Show more ↓'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
       ) : null}
 
       {/* Watch button */}
@@ -157,6 +173,15 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.bodyMed,
     fontSize: fontSize.meta,
     color: colors.accentSky,
+  },
+
+  // Measurement layer
+  measureHidden: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    opacity: 0,
   },
 
   // Synopsis
