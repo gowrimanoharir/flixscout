@@ -102,7 +102,7 @@ export async function searchContent(input: SearchContentInput): Promise<ContentR
       posterUrl: poster,
       overview: String(s.overview ?? ''),
       rating: typeof s.rating === 'number' ? s.rating : 0,
-      year: s.releaseYear ? String(s.releaseYear) : '',
+      year: String(s.releaseYear ?? (s as Record<string, unknown>).firstAirYear ?? ''),
       genres: genreList,
       runtime: typeof s.runtime === 'number' ? s.runtime : 0,
       streamingOptions: (s.streamingOptions ?? {}) as Record<string, StreamingOption[]>,
