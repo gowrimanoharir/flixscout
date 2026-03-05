@@ -18,6 +18,7 @@ export function getLLM(): ChatAnthropic {
     apiKey,
     model: 'claude-sonnet-4-6',
     maxTokens: 1024,
+    topP: 1,  // explicit default — avoids @langchain/anthropic sending top_p:-1
   });
 
   return _llm;
