@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,10 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { GradientText } from '@/components/GradientText';
+import { ChatBubble } from '@/components/ChatBubble';
+import { ClarificationChips } from '@/components/ClarificationChips';
+import { useAgent } from '@/hooks/useAgent';
+import type { ChatItem } from '@/hooks/useAgent';
 import {
   colors,
   gradients,
@@ -45,8 +49,10 @@ export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === 'web' && width >= DESKTOP_BREAKPOINT;
   const [input, setInput] = useState('');
+  const scrollRef = useRef<ScrollView>(null);
+  const agent = useAgent();
 
-  // Floating animation for the telescope emoji
+  // Floating animation for the telescope emoji (empty state only)
   const offsetY = useSharedValue(0);
   useEffect(() => {
     offsetY.value = withRepeat(
@@ -63,11 +69,52 @@ export default function HomeScreen() {
   }));
 
   const desktopPadH = isDesktop ? 48 : spacing.chatPadH;
+  const hasActivity = agent.items.length > 0 || agent.isLoading;
+
+  function handleSend(text?: string) {
+    const msg = (text ?? input).trim();
+    if (!msg || agent.isLoading) return;
+    setInput('');
+    agent.send(msg);
+  }
+
+  function renderItem(item: ChatItem) {
+    switch (item.kind) {
+      case 'user':
+        return <ChatBubble key={item.id} role="user" text={item.text} />;
+      case 'assistant':
+        return <ChatBubble key={item.id} role="assistant" text={item.text} />;
+      case 'error':
+        return <ChatBubble key={item.id} role="error" text={item.text} />;
+      case 'clarification':
+        return (
+          <ClarificationChips
+            key={item.id}
+            questions={item.questions}
+            onSubmit={agent.submitClarification}
+          />
+        );
+      case 'cards': {
+        const summary = item.titles
+          .map(t => `• ${t.title} — ${t.platform}`)
+          .join('\n');
+        return (
+          <ChatBubble
+            key={item.id}
+            role="assistant"
+            text={`Found ${item.titles.length} title${item.titles.length !== 1 ? 's' : ''} on your platforms:\n\n${summary}`}
+          />
+        );
+      }
+      default:
+        return null;
+    }
+  }
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
 
-      {/* ── Nav — truly full-width ── */}
+      {/* ── Nav ── */}
       <View style={[styles.nav, { paddingHorizontal: isDesktop ? 48 : 20 }]}>
         <GradientText style={styles.logoText}>FlixScout</GradientText>
         <View style={styles.navBadge}>
@@ -75,64 +122,69 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* ── Chat area — full-width with desktop padding ── */}
+      {/* ── Chat area ── */}
       <ScrollView
+        ref={scrollRef}
         style={styles.chatArea}
         contentContainerStyle={[styles.chatContent, { paddingHorizontal: desktopPadH }]}
         keyboardShouldPersistTaps="handled"
+        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
       >
-        <View style={styles.emptyState}>
+        {!hasActivity ? (
+          /* ── Empty state ── */
+          <View style={styles.emptyState}>
 
-          {/* Floating icon */}
-          <Animated.Text style={[styles.emptyIcon, floatStyle]}>
-            🔭
-          </Animated.Text>
+            <Animated.Text style={[styles.emptyIcon, floatStyle]}>
+              🔭
+            </Animated.Text>
 
-          {/* Heading */}
-          <GradientText style={styles.emptyTitle}>
-            What do you want to watch?
-          </GradientText>
+            <GradientText style={styles.emptyTitle}>
+              What do you want to watch?
+            </GradientText>
 
-          {/* Subtitle */}
-          <Text style={[styles.emptySub, isDesktop && styles.emptySubDesktop]}>
-            Tell me your mood, a genre, a vibe — I'll scout your platforms and find it.
-          </Text>
-
-          {/* Hint strip */}
-          <View style={[styles.hintStrip, isDesktop && styles.hintStripDesktop]}>
-            <Text style={styles.hintIcon}>💬</Text>
-            <Text style={styles.hintText}>
-              Type naturally — include your{' '}
-              <Text style={styles.hintHighlight}>streaming services</Text>
-              , mood, language, runtime, anything. Or tap a suggestion to start.
+            <Text style={[styles.emptySub, isDesktop && styles.emptySubDesktop]}>
+              Tell me your mood, a genre, a vibe — I'll scout your platforms and find it.
             </Text>
-          </View>
 
-          {/* Quick start divider */}
-          <View style={[styles.orDivider, isDesktop && styles.orDividerDesktop]}>
-            <View style={styles.orLine} />
-            <Text style={styles.orText}>quick start</Text>
-            <View style={styles.orLine} />
-          </View>
+            <View style={[styles.hintStrip, isDesktop && styles.hintStripDesktop]}>
+              <Text style={styles.hintIcon}>💬</Text>
+              <Text style={styles.hintText}>
+                Type naturally — include your{' '}
+                <Text style={styles.hintHighlight}>streaming services</Text>
+                , mood, language, runtime, anything. Or tap a suggestion to start.
+              </Text>
+            </View>
 
-          {/* Suggestion pills */}
-          <View style={[styles.suggestions, isDesktop && styles.suggestionsDesktop]}>
-            {SUGGESTIONS.map((s) => (
-              <TouchableOpacity
-                key={s}
-                style={styles.sugPill}
-                onPress={() => setInput(s)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.sugPillText}>{s}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+            <View style={[styles.orDivider, isDesktop && styles.orDividerDesktop]}>
+              <View style={styles.orLine} />
+              <Text style={styles.orText}>quick start</Text>
+              <View style={styles.orLine} />
+            </View>
 
-        </View>
+            <View style={[styles.suggestions, isDesktop && styles.suggestionsDesktop]}>
+              {SUGGESTIONS.map((s) => (
+                <TouchableOpacity
+                  key={s}
+                  style={styles.sugPill}
+                  onPress={() => handleSend(s)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.sugPillText}>{s}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+          </View>
+        ) : (
+          /* ── Chat messages ── */
+          <View style={styles.messages}>
+            {agent.items.map(renderItem)}
+            {agent.isLoading && <TypingIndicator text={agent.statusText} />}
+          </View>
+        )}
       </ScrollView>
 
-      {/* ── Input bar — full-width ── */}
+      {/* ── Input bar ── */}
       <View style={[styles.inputBar, { paddingBottom: insets.bottom + spacing.inputBarV }]}>
         <View style={[styles.inputRow, { paddingHorizontal: isDesktop ? 48 : spacing.inputBarH }]}>
           <View style={styles.inputWrap}>
@@ -143,16 +195,23 @@ export default function HomeScreen() {
               value={input}
               onChangeText={setInput}
               returnKeyType="send"
+              onSubmitEditing={() => handleSend()}
+              blurOnSubmit={false}
+              editable={!agent.isLoading}
             />
           </View>
-          <TouchableOpacity activeOpacity={0.8}>
+          <TouchableOpacity
+            onPress={() => handleSend()}
+            activeOpacity={0.8}
+            disabled={agent.isLoading}
+          >
             <LinearGradient
               colors={gradients.dark}
               start={gradientAngle.start}
               end={gradientAngle.end}
-              style={styles.sendBtn}
+              style={[styles.sendBtn, agent.isLoading && styles.sendBtnDisabled]}
             >
-              <SendIcon />
+              <Text style={styles.sendArrow}>↑</Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>
@@ -162,9 +221,21 @@ export default function HomeScreen() {
   );
 }
 
-function SendIcon() {
+function TypingIndicator({ text }: { text: string | null }) {
   return (
-    <Text style={styles.sendArrow}>↑</Text>
+    <View style={styles.typingRow}>
+      <LinearGradient
+        colors={gradients.dark}
+        start={gradientAngle.start}
+        end={gradientAngle.end}
+        style={styles.typingAvatar}
+      >
+        <Text style={styles.typingAvatarText}>✦</Text>
+      </LinearGradient>
+      <View style={styles.typingBubble}>
+        <Text style={styles.typingText}>{text ?? '…'}</Text>
+      </View>
+    </View>
   );
 }
 
@@ -214,6 +285,46 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.chatPadV,
   },
 
+  // Messages list
+  messages: {
+    gap: spacing.msgGap,
+  },
+
+  // Typing indicator
+  typingRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  typingAvatar: {
+    width: layout.avatarSize,
+    height: layout.avatarSize,
+    borderRadius: radius.avatar,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  typingAvatarText: {
+    fontSize: 11,
+    color: colors.text,
+  },
+  typingBubble: {
+    paddingVertical: 10,
+    paddingHorizontal: 13,
+    backgroundColor: colors.surface2,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderTopLeftRadius: 3,
+    borderTopRightRadius: 14,
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 14,
+  },
+  typingText: {
+    fontFamily: fontFamily.body,
+    fontSize: fontSize.body,
+    color: colors.text2,
+  },
+
   // Empty state
   emptyState: {
     alignItems: 'center',
@@ -237,7 +348,6 @@ const styles = StyleSheet.create({
     lineHeight: fontSize.body * 1.6,
     maxWidth: 250,
   },
-
   emptySubDesktop: { maxWidth: 480 },
   hintStripDesktop: { maxWidth: 560 },
   orDividerDesktop: { maxWidth: 560 },
@@ -327,7 +437,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 9,
-    paddingHorizontal: spacing.inputBarH,
   },
   inputWrap: {
     flex: 1,
@@ -351,6 +460,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.skyAlpha12,
+  },
+  sendBtnDisabled: {
+    opacity: 0.4,
   },
   sendArrow: {
     color: colors.text,
