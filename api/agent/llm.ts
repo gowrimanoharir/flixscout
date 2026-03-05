@@ -18,7 +18,8 @@ export function getLLM(): ChatAnthropic {
     apiKey,
     model: 'claude-sonnet-4-6',
     maxTokens: 1024,
-    temperature: 0,  // deterministic — also prevents top_p conflict in @langchain/anthropic
+    topP: 1,  // model allows only one of temperature/top_p; use top_p to avoid default -1
+    invocationKwargs: { temperature: undefined },  // omit temperature so API receives only top_p
   });
 
   return _llm;
