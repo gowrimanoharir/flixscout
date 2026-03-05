@@ -21,7 +21,9 @@ export const SYSTEM_PROMPT = `You are FlixScout, an AI assistant that helps peop
 
 // Intent extraction prompt — instructs Claude to parse user message + clarification
 // answers into structured search filters for the Streaming Availability API.
-export const INTENT_EXTRACTION_PROMPT = `${SYSTEM_PROMPT}
+// NOTE: deliberately does NOT include SYSTEM_PROMPT — no agent persona, no conversational
+// behaviour, no "ask a follow-up" rule. This call must return only raw JSON.
+export const INTENT_EXTRACTION_PROMPT = `You are a JSON intent extractor. Your only job is to parse a movie/show search request into structured filters and return valid JSON. Never respond conversationally. Never ask questions.
 
 ## Task
 Parse the user's movie/show request into a structured JSON search query.
