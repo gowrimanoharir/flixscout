@@ -132,7 +132,7 @@ export default function HomeScreen() {
       >
         {!hasActivity ? (
           /* ── Empty state ── */
-          <View style={styles.emptyState}>
+          <View style={[styles.emptyState, isDesktop && styles.emptyStateDesktop]}>
 
             <Animated.Text style={[styles.emptyIcon, floatStyle]}>
               🔭
@@ -283,6 +283,12 @@ const styles = StyleSheet.create({
     gap: 13,
     paddingTop: 48,
     paddingBottom: 32,
+    width: '100%',
+  },
+  emptyStateDesktop: {
+    paddingTop: 80,
+    maxWidth: 720,
+    alignSelf: 'center',
   },
   emptyIcon: {
     fontSize: 34,
@@ -298,12 +304,12 @@ const styles = StyleSheet.create({
     color: colors.text2,
     textAlign: 'center',
     lineHeight: fontSize.body * 1.6,
-    maxWidth: 250,
+    maxWidth: 280,
   },
-  emptySubDesktop: { maxWidth: 480 },
-  hintStripDesktop: { maxWidth: 560 },
-  orDividerDesktop: { maxWidth: 560 },
-  suggestionsDesktop: { maxWidth: 560, flexDirection: 'row', flexWrap: 'wrap' },
+  emptySubDesktop: { maxWidth: 520 },
+  hintStripDesktop: { maxWidth: 680 },
+  orDividerDesktop: { maxWidth: 680 },
+  suggestionsDesktop: { maxWidth: 680, flexDirection: 'row', flexWrap: 'wrap' },
 
   // Hint strip
   hintStrip: {
@@ -316,7 +322,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.hint,
     padding: 10,
     paddingHorizontal: 13,
-    maxWidth: 300,
+    maxWidth: 340,
     width: '100%',
   },
   hintIcon: {
@@ -342,7 +348,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     width: '100%',
-    maxWidth: 300,
+    maxWidth: 340,
   },
   orLine: {
     flex: 1,
@@ -361,7 +367,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 7,
     justifyContent: 'center',
-    maxWidth: 300,
+    maxWidth: 340,
   },
   sugPill: {
     paddingVertical: 7,

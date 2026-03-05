@@ -113,7 +113,13 @@ export function useAgent(country?: string) {
   }
 
   function submitClarification(answers: Record<string, string[]>) {
-    setItems(prev => prev.filter(item => item.kind !== 'clarification'));
+    const summary = Object.values(answers).flat().filter(Boolean).join(' · ');
+    setItems(prev => {
+      const withoutChips = prev.filter(item => item.kind !== 'clarification');
+      return summary
+        ? [...withoutChips, { kind: 'user', id: uid(), text: summary }]
+        : withoutChips;
+    });
     send(pendingMessageRef.current, answers);
   }
 

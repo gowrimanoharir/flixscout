@@ -11,7 +11,6 @@ interface Props {
 
 export function ClarificationChips({ questions, onSubmit }: Props) {
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
-  const allAnswered = questions.every(q => (answers[q.question]?.length ?? 0) > 0);
 
   function toggle(question: string, option: string) {
     setAnswers(prev => {
@@ -51,8 +50,7 @@ export function ClarificationChips({ questions, onSubmit }: Props) {
         </View>
       ))}
 
-      {allAnswered && (
-        <TouchableOpacity onPress={() => onSubmit(answers)} activeOpacity={0.8}>
+      <TouchableOpacity onPress={() => onSubmit(answers)} activeOpacity={0.8}>
           <LinearGradient
             colors={gradients.dark}
             start={gradientAngle.start}
@@ -62,7 +60,6 @@ export function ClarificationChips({ questions, onSubmit }: Props) {
             <Text style={styles.submitText}>Scout it →</Text>
           </LinearGradient>
         </TouchableOpacity>
-      )}
     </View>
   );
 }
