@@ -55,11 +55,13 @@ export async function searchContent(input: SearchContentInput): Promise<ContentR
   url.searchParams.set('country', input.country.toLowerCase());
   url.searchParams.set('show_type', input.type === 'tv' ? 'series' : 'movie');
   url.searchParams.set('order_by', 'rating');
+  url.searchParams.set('order_direction', 'desc');
 
-  if (input.keyword) url.searchParams.set('keyword', input.keyword);
+  // Send keyword only when no genres are specified — genre+keyword can be too restrictive
+  if (input.keyword && !input.genres?.length) url.searchParams.set('keyword', input.keyword);
   if (input.genres?.length) url.searchParams.set('genres', input.genres.join(','));
   if (input.platforms?.length) url.searchParams.set('catalogs', input.platforms.join(','));
-  if (input.language) url.searchParams.set('original_language', input.language);
+  if (input.language) url.searchParams.set('show_original_language', input.language);
   if (input.minRating != null) url.searchParams.set('rating_min', String(Math.round(input.minRating * 10)));
   if (input.yearFrom != null) url.searchParams.set('year_min', String(input.yearFrom));
   if (input.yearTo != null) url.searchParams.set('year_max', String(input.yearTo));
