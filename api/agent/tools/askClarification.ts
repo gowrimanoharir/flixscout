@@ -11,6 +11,7 @@ import { getLLM } from '../llm';
 import { extractJson } from '../utils';
 import type { ClarificationQuestion } from '../../../shared/types';
 import type { ServiceOption } from './countryServices';
+import { SYSTEM_PROMPT } from '../systemPrompt';
 
 export const askClarificationSchema = z.object({
   prompt: z.string().describe('The user prompt to generate clarifying questions for'),
@@ -29,8 +30,9 @@ function buildSystem(services: ServiceOption[]): string {
     ? `## Available streaming services for this user\n${services.map((s) => `- ${s.name}`).join('\n')}\n\n`
     : '';
 
-  return `You generate clarifying questions for a movie and TV show recommendation chatbot.
+  return `${SYSTEM_PROMPT}
 
+## Current task: generate clarifying questions
 ${servicesSection}## Rules
 - If the prompt already mentions genre AND platform, return at most 1 question
 - If the prompt is vague, return up to 5 questions
