@@ -1,129 +1,109 @@
-// OMDb content search — env: CONTENT_API_KEY
-// Flow:
-//   1. Search endpoint (?s=keyword) → up to 5 candidate titles
-//   2. Detail endpoint (?i=imdbID) per candidate → enriched metadata
-//   3. Post-filter by year, rating, runtime, certification
-// Always include_adult=false (OMDb default).
+// Streaming Availability /shows/search/filters — env: STREAMING_API_KEY + STREAMING_API_BASE
+// One request returns full metadata + confirmed streaming options for the given country/platforms.
+// country and platforms are passed in directly from the request body.
+// runtimeMin/runtimeMax are NOT sent to the API — post-filtered by checkAvailability.
 
 import { z } from 'zod';
 
 export const searchContentSchema = z.object({
-  keyword: z.string().describe('Search keyword derived from user intent e.g. "French thriller"'),
-  genres: z.array(z.string()).optional().describe('Genre list e.g. ["Action","Comedy"]'),
-  language: z.string().optional().describe('ISO language code e.g. "fr" for French'),
-  certification: z.enum(['G', 'PG', 'PG-13', 'R']).optional(),
-  runtimeMin: z.number().optional(),
-  runtimeMax: z.number().optional(),
-  minRating: z.number().optional(),
-  yearFrom: z.number().optional(),
-  yearTo: z.number().optional(),
+  keyword: z.string().optional().describe('Search keyword e.g. "heist thriller" or "cozy mystery"'),
+  genres: z.array(z.string()).optional().describe(
+    'Genre slugs from: action, adventure, animation, comedy, crime, documentary, drama, ' +
+    'fantasy, history, horror, music, mystery, romance, science-fiction, sport, thriller, war, western'
+  ),
   type: z.enum(['movie', 'tv']),
+  language: z.string().optional().describe('ISO 639-1 original language code e.g. "fr" for French'),
+  minRating: z.number().optional().describe('Min IMDb-style rating 0–10 (converted to 0–100 for the API)'),
+  yearFrom: z.number().optional().describe('Earliest release year e.g. 2000'),
+  yearTo: z.number().optional().describe('Latest release year e.g. 2023'),
+  country: z.string().describe('ISO 3166-1 alpha-2 country code e.g. "US"'),
+  platforms: z.array(z.string()).optional().describe('Platform slugs e.g. ["netflix","prime"]'),
 });
 
 export type SearchContentInput = z.infer<typeof searchContentSchema>;
+
+export interface StreamingOption {
+  service: { id: string; name: string };
+  type: string;
+  link: string;
+  videoQuality?: string;
+  audios?: Array<{ language: string }>;
+}
 
 export interface ContentResult {
   imdbId: string;
   title: string;
   posterUrl: string;
   overview: string;
-  imdbRating: number;
+  rating: number;   // 0–100 scale
   year: string;
-  genre: string;
-  runtime: string;
+  genres: string;
+  runtime: number;  // raw minutes (0 = unknown)
+  streamingOptions: Record<string, StreamingOption[]>;
 }
 
-async function fetchOmdb(params: Record<string, string>): Promise<Record<string, unknown>> {
-  const apiKey = process.env.CONTENT_API_KEY;
-  if (!apiKey) throw new Error('CONTENT_API_KEY environment variable is required');
+export async function searchContent(input: SearchContentInput): Promise<ContentResult[]> {
+  const apiKey = process.env.STREAMING_API_KEY;
+  if (!apiKey) throw new Error('STREAMING_API_KEY is required');
 
-  const base = process.env.CONTENT_API_BASE;
-  if (!base) throw new Error('CONTENT_API_BASE environment variable is required');
-  const url = new URL(base);
-  url.searchParams.set('apikey', apiKey);
+  const base = process.env.STREAMING_API_BASE;
+  if (!base) throw new Error('STREAMING_API_BASE is required');
 
-  // Some OMDb plans require a fixed `i` identifier sent with every request.
-  // Detail lookups pass i=imdbID in params, which will override this below.
-  const iKey = process.env.CONTENT_API_IKEY;
-  if (iKey) url.searchParams.set('i', iKey);
+  const host = new URL(base).hostname;
+  const url = new URL(`${base.replace(/\/$/, '')}/shows/search/filters`);
 
-  // Apply caller params (i=imdbID for detail calls overrides CONTENT_API_IKEY)
-  for (const [k, v] of Object.entries(params)) {
-    url.searchParams.set(k, v);
-  }
+  url.searchParams.set('country', input.country.toLowerCase());
+  url.searchParams.set('show_type', input.type === 'tv' ? 'series' : 'movie');
+  url.searchParams.set('order_by', 'rating');
 
-  // Debug: log URL with key masked
-  const debugUrl = url.toString().replace(apiKey, '***');
-  console.log('[OMDb] →', debugUrl);
+  if (input.keyword) url.searchParams.set('keyword', input.keyword);
+  if (input.genres?.length) url.searchParams.set('genres', input.genres.join(','));
+  if (input.platforms?.length) url.searchParams.set('catalogs', input.platforms.join(','));
+  if (input.language) url.searchParams.set('original_language', input.language);
+  if (input.minRating != null) url.searchParams.set('rating_min', String(Math.round(input.minRating * 10)));
+  if (input.yearFrom != null) url.searchParams.set('year_min', String(input.yearFrom));
+  if (input.yearTo != null) url.searchParams.set('year_max', String(input.yearTo));
 
-  const res = await fetch(url.toString());
-  if (!res.ok) throw new Error(`OMDb API error: ${res.status}`);
-  const data = await res.json() as Record<string, unknown>;
-  console.log('[OMDb] ←', JSON.stringify(data).slice(0, 600));
-  return data;
-}
+  console.log('[Search] →', url.toString().replace(apiKey, '***'));
 
-function passesFilters(d: Record<string, unknown>, input: SearchContentInput): boolean {
-  const year = parseInt(String(d.Year ?? '0'));
-  if (input.yearFrom && year < input.yearFrom) return false;
-  if (input.yearTo && year > input.yearTo) return false;
+  const res = await fetch(url.toString(), {
+    headers: {
+      'X-RapidAPI-Key': apiKey,
+      'X-RapidAPI-Host': host,
+    },
+  });
 
-  const rating = parseFloat(String(d.imdbRating ?? '0'));
-  if (input.minRating && rating < input.minRating) return false;
+  if (!res.ok) throw new Error(`Search API error: ${res.status}`);
 
-  const rawRuntime = String(d.Runtime ?? '');
-  const runtime = rawRuntime === 'N/A' ? NaN : parseInt(rawRuntime);
-  if (input.runtimeMin && (isNaN(runtime) || runtime < input.runtimeMin)) return false;
-  if (input.runtimeMax && (isNaN(runtime) || runtime > input.runtimeMax)) return false;
+  const data = await res.json() as { shows?: unknown[] };
+  const count = Array.isArray(data.shows) ? data.shows.length : 0;
+  console.log('[Search] ← got', count, 'results');
 
-  if (input.certification) {
-    const rated = String(d.Rated ?? '');
-    if (rated !== input.certification) return false;
-  }
+  if (!Array.isArray(data.shows)) return [];
 
-  return true;
-}
+  return data.shows.slice(0, 20).map((show) => {
+    const s = show as Record<string, unknown>;
 
-export async function searchContent(
-  input: SearchContentInput
-): Promise<ContentResult[]> {
-  const omdbType = input.type === 'tv' ? 'series' : 'movie';
-  console.log('[OMDb] searching keyword:', input.keyword, '| type:', omdbType);
+    const genreList = Array.isArray(s.genres)
+      ? (s.genres as Array<{ name: string }>).map((g) => g.name).join(', ')
+      : '';
 
-  const searchData = await fetchOmdb({ s: input.keyword, type: omdbType });
+    const imageSet = s.imageSet as Record<string, Record<string, string>> | undefined;
+    const poster =
+      imageSet?.verticalPoster?.w360 ??
+      imageSet?.verticalPoster?.w240 ??
+      '';
 
-  if (searchData['Response'] === 'False' || !Array.isArray(searchData['Search'])) {
-    console.log('[OMDb] search returned no results. Error:', searchData['Error'] ?? 'none');
-    return [];
-  }
-
-  const candidates = (searchData['Search'] as Array<Record<string, string>>)
-    .filter((item) => typeof item.imdbID === 'string' && item.imdbID)
-    .slice(0, 5);
-
-  const details = await Promise.all(
-    candidates.map((item) =>
-      fetchOmdb({ i: item.imdbID, plot: 'short' }).catch(() => null)
-    )
-  );
-
-  const results: ContentResult[] = [];
-
-  for (const detail of details) {
-    if (!detail || detail['Response'] === 'False') continue;
-    if (!passesFilters(detail, input)) continue;
-
-    results.push({
-      imdbId: String(detail['imdbID'] ?? ''),
-      title: String(detail['Title'] ?? ''),
-      posterUrl: detail['Poster'] !== 'N/A' ? String(detail['Poster']) : '',
-      overview: detail['Plot'] !== 'N/A' ? String(detail['Plot']) : '',
-      imdbRating: parseFloat(String(detail['imdbRating'])) || 0,
-      year: String(detail['Year'] ?? ''),
-      genre: detail['Genre'] !== 'N/A' ? String(detail['Genre']) : '',
-      runtime: detail['Runtime'] !== 'N/A' ? String(detail['Runtime']) : '',
-    });
-  }
-
-  return results;
+    return {
+      imdbId: String(s.imdbId ?? ''),
+      title: String(s.title ?? ''),
+      posterUrl: poster,
+      overview: String(s.overview ?? ''),
+      rating: typeof s.rating === 'number' ? s.rating : 0,
+      year: s.releaseYear ? String(s.releaseYear) : '',
+      genres: genreList,
+      runtime: typeof s.runtime === 'number' ? s.runtime : 0,
+      streamingOptions: (s.streamingOptions ?? {}) as Record<string, StreamingOption[]>,
+    };
+  });
 }

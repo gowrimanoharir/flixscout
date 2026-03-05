@@ -1,11 +1,16 @@
-// Parses user message + clarification answers into structured SearchContent filters
-// using Claude intent extraction. Replaces the previous keyword-only approach.
+// Parses user message + clarification answers into structured search filters
+// using Claude intent extraction. country and platforms are added by the orchestrator.
 
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { getLLM } from './llm';
 import { extractJson } from './utils';
 import { INTENT_EXTRACTION_PROMPT } from './systemPrompt';
 import type { SearchContentInput } from './tools/searchContent';
+
+export interface SearchFilters extends Omit<SearchContentInput, 'country' | 'platforms'> {
+  runtimeMin?: number;
+  runtimeMax?: number;
+}
 
 function buildUserMessage(
   message: string,
@@ -25,7 +30,7 @@ function buildUserMessage(
 export async function buildSearchFilters(
   message: string,
   clarificationAnswers: Record<string, string[]>
-): Promise<SearchContentInput> {
+): Promise<SearchFilters> {
   const llm = getLLM();
 
   const response = await llm.invoke([
@@ -41,17 +46,14 @@ export async function buildSearchFilters(
   }
 
   return {
-    keyword: String(parsed.keyword ?? message.trim()),
+    keyword: parsed.keyword ? String(parsed.keyword) : undefined,
     type: parsed.type === 'tv' ? 'tv' : 'movie',
     genres: Array.isArray(parsed.genres) ? parsed.genres.map(String) : undefined,
     language: parsed.language ? String(parsed.language) : undefined,
-    certification: (['G', 'PG', 'PG-13', 'R'] as const).includes(parsed.certification as 'G')
-      ? (parsed.certification as 'G' | 'PG' | 'PG-13' | 'R')
-      : undefined,
-    runtimeMin: typeof parsed.runtimeMin === 'number' ? parsed.runtimeMin : undefined,
-    runtimeMax: typeof parsed.runtimeMax === 'number' ? parsed.runtimeMax : undefined,
     minRating: typeof parsed.minRating === 'number' ? parsed.minRating : undefined,
     yearFrom: typeof parsed.yearFrom === 'number' ? parsed.yearFrom : undefined,
     yearTo: typeof parsed.yearTo === 'number' ? parsed.yearTo : undefined,
+    runtimeMin: typeof parsed.runtimeMin === 'number' ? parsed.runtimeMin : undefined,
+    runtimeMax: typeof parsed.runtimeMax === 'number' ? parsed.runtimeMax : undefined,
   };
 }

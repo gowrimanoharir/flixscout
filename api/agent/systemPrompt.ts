@@ -20,22 +20,31 @@ export const SYSTEM_PROMPT = `You are FlixScout, an AI assistant that helps peop
 - Never repeat back the user's request verbatim.`;
 
 // Intent extraction prompt — instructs Claude to parse user message + clarification
-// answers into structured SearchContentInput fields.
+// answers into structured search filters for the Streaming Availability API.
 export const INTENT_EXTRACTION_PROMPT = `${SYSTEM_PROMPT}
 
 ## Task
 Parse the user's movie/show request into a structured JSON search query.
 Return ONLY valid JSON — no markdown, no extra text — matching this exact shape:
 {
-  "keyword": "concise search phrase (2–4 words capturing the core intent)",
+  "keyword": "2–4 word phrase capturing mood, theme, or setting e.g. 'cozy mystery' or 'heist thriller'",
   "type": "movie" | "tv",
-  "genres": ["Genre"] | null,
+  "genres": ["slug1", "slug2"] | null,
   "language": "ISO 639-1 code e.g. fr" | null,
-  "certification": "G" | "PG" | "PG-13" | "R" | null,
-  "runtimeMin": number | null,
-  "runtimeMax": number | null,
-  "minRating": number | null,
+  "minRating": number (0–10 IMDb scale) | null,
   "yearFrom": number | null,
-  "yearTo": number | null
+  "yearTo": number | null,
+  "runtimeMin": number (minutes) | null,
+  "runtimeMax": number (minutes) | null
 }
-Omit null fields entirely. Use the clarification answers to fill in values the user chose.`;
+
+Valid genre slugs (use only these exact values):
+action, adventure, animation, comedy, crime, documentary, drama, fantasy,
+history, horror, music, mystery, romance, science-fiction, sport, thriller, war, western
+
+Rules:
+- keyword should describe mood, theme, setting, or tone — not be a genre word alone
+- genres should capture the primary genre(s) when clearly stated
+- language: only set when the user explicitly asks for a specific language (e.g. "French films")
+- Omit null fields entirely
+- Use the clarification answers to fill in values the user chose`;

@@ -1,115 +1,72 @@
-// RapidAPI Streaming Availability (Movie of the Night) — env: STREAMING_API_KEY
-// API: https://streaming-availability.p.rapidapi.com/shows/{imdbId}?country=<code>
-// Fetches each title concurrently, filters by requested platforms.
-// Titles not streamable on any requested platform are silently dropped.
+// Pure formatter — no API call.
+// Receives raw ContentResult[] from searchContent (which already includes streaming options),
+// post-filters by runtime, filters to titles available on the requested platforms in the
+// given country, sorts by rating descending, and returns the top 5 as AvailableTitle[].
 
-import { z } from 'zod';
 import type { AvailableTitle } from '../../../shared/types';
+import type { ContentResult, StreamingOption } from './searchContent';
 
-export const checkAvailabilitySchema = z.object({
-  imdbIds: z.array(z.string()).describe('IMDb IDs from OMDb results'),
-  country: z.string().describe('ISO 3166-1 alpha-2 country code e.g. "CA"'),
-  platforms: z.array(z.string()).describe('Platform slugs e.g. ["netflix","prime"]'),
-});
+export interface CheckAvailabilityInput {
+  results: ContentResult[];
+  country: string;
+  platforms: string[];
+  runtimeMin?: number; // minutes
+  runtimeMax?: number; // minutes
+}
 
-export type CheckAvailabilityInput = z.infer<typeof checkAvailabilitySchema>;
 export type { AvailableTitle };
 
-interface StreamingOption {
-  service: { id: string; name: string };
-  type: string;
-  link: string;
-  videoQuality?: string;
-  audios?: Array<{ language: string }>;
-}
-
-async function fetchAvailability(
-  imdbId: string,
-  country: string,
-  apiKey: string
-): Promise<Record<string, unknown> | null> {
-  const base = process.env.STREAMING_API_BASE;
-  if (!base) throw new Error('STREAMING_API_BASE environment variable is required');
-
-  const host = new URL(base).hostname;
-  const url = `${base}/shows/${imdbId}?country=${country.toLowerCase()}`;
-
-  console.log('[Streaming] →', url);
-  const res = await fetch(url, {
-    headers: {
-      'X-RapidAPI-Key': apiKey,
-      'X-RapidAPI-Host': host,
-    },
-  });
-
-  if (res.status === 404) {
-    console.log('[Streaming] ← 404 not found:', imdbId);
-    return null;
-  }
-  if (!res.ok) throw new Error(`Streaming API error: ${res.status}`);
-  const data = await res.json() as Record<string, unknown>;
-  console.log('[Streaming] ←', imdbId, JSON.stringify(data).slice(0, 600));
-  return data;
-}
-
-function extractOptions(
-  data: Record<string, unknown>,
+function pickOption(
+  streamingOptions: Record<string, StreamingOption[]>,
   country: string,
   platforms: string[]
-): StreamingOption[] {
-  const countryKey = country.toLowerCase();
-  const raw = data['streamingOptions'];
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
+): StreamingOption | null {
+  const options = streamingOptions[country.toLowerCase()];
+  if (!Array.isArray(options) || !options.length) return null;
 
-  const byCountry = (raw as Record<string, unknown>)[countryKey];
-  if (!Array.isArray(byCountry)) return [];
+  if (!platforms.length) return options[0];
 
-  const options = byCountry.filter(
-    (o): o is StreamingOption =>
-      !!o && typeof o === 'object' && typeof (o as StreamingOption).service?.id === 'string'
-  );
-
-  if (!platforms.length) return options;
-
-  return options.filter((opt) =>
-    platforms.some((p) => opt.service.id.toLowerCase() === p.toLowerCase())
+  return (
+    options.find((opt) =>
+      platforms.some((p) => opt.service.id.toLowerCase() === p.toLowerCase())
+    ) ?? null
   );
 }
 
-export async function checkAvailability(
-  input: CheckAvailabilityInput
-): Promise<AvailableTitle[]> {
-  const apiKey = process.env.STREAMING_API_KEY;
-  if (!apiKey) throw new Error('STREAMING_API_KEY environment variable is required');
+export function checkAvailability(input: CheckAvailabilityInput): AvailableTitle[] {
+  const { results, country, platforms, runtimeMin, runtimeMax } = input;
 
-  const { imdbIds, country, platforms } = input;
-  console.log('[Streaming] checking', imdbIds.length, 'titles | country:', country, '| platforms:', platforms);
+  const available: Array<AvailableTitle & { _rating: number }> = [];
 
-  const results = await Promise.all(
-    imdbIds.map((id) => fetchAvailability(id, country, apiKey).catch(() => null))
-  );
+  for (const result of results) {
+    if (!result.imdbId) continue;
 
-  const available: AvailableTitle[] = [];
+    // Post-filter by runtime (skip unknowns only when a limit is specified)
+    if (runtimeMin != null && (result.runtime === 0 || result.runtime < runtimeMin)) continue;
+    if (runtimeMax != null && (result.runtime === 0 || result.runtime > runtimeMax)) continue;
 
-  for (let i = 0; i < results.length; i++) {
-    const data = results[i];
-    if (!data) continue;
-
-    const options = extractOptions(data, country, platforms);
-    if (!options.length) continue;
-
-    // Use the first matching option for the primary streaming info
-    const primary = options[0];
+    const option = pickOption(result.streamingOptions, country, platforms);
+    if (!option) continue;
 
     available.push({
-      imdbId: imdbIds[i],
-      title: String(data['title'] ?? ''),
-      platform: primary.service.name,
-      streamUrl: primary.link,
-      audioLanguages: (primary.audios ?? []).map((a) => a.language),
-      videoQuality: primary.videoQuality ?? 'sd',
+      imdbId: result.imdbId,
+      title: result.title,
+      platform: option.service.name,
+      streamUrl: option.link,
+      audioLanguages: (option.audios ?? []).map((a) => a.language),
+      videoQuality: option.videoQuality ?? 'sd',
+      posterUrl: result.posterUrl,
+      overview: result.overview,
+      imdbRating: result.rating / 10, // convert 0–100 → 0–10
+      year: result.year,
+      genre: result.genres,
+      runtime: result.runtime > 0 ? `${result.runtime} min` : '',
+      _rating: result.rating,
     });
   }
 
-  return available;
+  return available
+    .sort((a, b) => b._rating - a._rating)
+    .slice(0, 5)
+    .map(({ _rating, ...title }) => title);
 }

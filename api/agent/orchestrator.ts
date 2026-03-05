@@ -3,7 +3,8 @@
 // Flow:
 //   1. GuardRailCheck   — always first, blocks NSFW / off-topic
 //   2. AskClarification — human-in-the-loop, halts and waits for chip answers
-//   3. SearchContent + CheckAvailability — run in parallel
+//   3. SearchContent    — single API call returns results + streaming options
+//   4. CheckAvailability — sync formatter: post-filter runtime, filter by platform, top 5 by rating
 //
 // Each step emits NDJSON events via the emit() helper.
 
@@ -61,35 +62,25 @@ export async function runOrchestrator(
       }
     }
 
-    // ── Step 3: SearchContent → CheckAvailability ───────────────────────
-    // Sequential: availability check needs the IMDb IDs from the search first
+    // ── Step 3: SearchContent ────────────────────────────────────────────
     emit(res, { type: 'status', payload: 'Searching for content…' });
 
-    const filters = await buildSearchFilters(message, clarificationAnswers);
-    const results = await searchContent(filters);
+    const { runtimeMin, runtimeMax, ...searchFilters } = await buildSearchFilters(
+      message,
+      clarificationAnswers
+    );
 
-    if (!results.length) {
-      emit(res, { type: 'message', payload: NO_RESULTS });
-      return;
-    }
+    const results = await searchContent({ ...searchFilters, country, platforms });
 
-    emit(res, { type: 'status', payload: 'Checking streaming availability…' });
-
-    const imdbIds = results.map((r) => r.imdbId);
-    const available = await checkAvailability({ imdbIds, country, platforms });
+    // ── Step 4: CheckAvailability (sync formatter) ───────────────────────
+    const available = checkAvailability({ results, country, platforms, runtimeMin, runtimeMax });
 
     if (!available.length) {
       emit(res, { type: 'message', payload: NO_RESULTS });
       return;
     }
 
-    // Enrich confirmed-available titles with poster/metadata from search results
-    const enriched = available.map((title) => {
-      const meta = results.find((r) => r.imdbId === title.imdbId);
-      return meta ? { ...title, ...meta } : title;
-    });
-
-    emit(res, { type: 'cards', payload: enriched });
+    emit(res, { type: 'cards', payload: available });
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
