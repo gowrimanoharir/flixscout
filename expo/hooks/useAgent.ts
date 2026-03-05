@@ -12,7 +12,7 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-export function useAgent() {
+export function useAgent(country?: string, platforms?: string[]) {
   const [items, setItems] = useState<ChatItem[]>([]);
   const [statusText, setStatusText] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -67,6 +67,8 @@ export function useAgent() {
           message,
           history: [],
           clarificationAnswers,
+          country,
+          platforms,
         }),
       });
 

@@ -1,9 +1,47 @@
-// TODO: Phase 6 — Country detection via Intl.DateTimeFormat timezone
-// Returns platform list for detected country
-// Supported regions: CA, US, GB, AU, IN, DE, FR, XX (fallback)
-// Platform data sourced from flixscout-final.html PLATFORMS map
+import { useMemo } from 'react';
 
 export type CountryCode = 'CA' | 'US' | 'GB' | 'AU' | 'IN' | 'DE' | 'FR' | 'XX';
+
+const PLATFORMS: Record<CountryCode, string[]> = {
+  US: ['Netflix', 'Prime Video', 'Disney+', 'Apple TV+', 'Max', 'Hulu', 'Peacock', 'Paramount+', 'MUBI'],
+  CA: ['Netflix', 'Prime Video', 'Disney+', 'Apple TV+', 'Crave', 'MUBI'],
+  GB: ['Netflix', 'Prime Video', 'Disney+', 'Apple TV+', 'ITVX', 'Channel 4', 'BBC iPlayer', 'MUBI'],
+  AU: ['Netflix', 'Prime Video', 'Disney+', 'Apple TV+', 'Stan', 'BINGE', 'MUBI'],
+  IN: ['Netflix', 'Prime Video', 'Disney+ Hotstar', 'Apple TV+', 'ZEE5', 'SonyLIV', 'MUBI'],
+  DE: ['Netflix', 'Prime Video', 'Disney+', 'Apple TV+', 'MUBI', 'ARD Mediathek'],
+  FR: ['Netflix', 'Prime Video', 'Disney+', 'Apple TV+', 'Canal+', 'MUBI'],
+  XX: ['Netflix', 'Prime Video', 'Disney+', 'Apple TV+', 'MUBI'],
+};
+
+const FLAGS: Record<CountryCode, string> = {
+  US: '🇺🇸', CA: '🇨🇦', GB: '🇬🇧', AU: '🇦🇺',
+  IN: '🇮🇳', DE: '🇩🇪', FR: '🇫🇷', XX: '🌍',
+};
+
+const LABELS: Record<CountryCode, string> = {
+  US: 'United States', CA: 'Canada', GB: 'United Kingdom',
+  AU: 'Australia', IN: 'India', DE: 'Germany', FR: 'France', XX: 'Unknown',
+};
+
+// CA-specific timezones — everything else in America/ is treated as US
+const CA_ZONES = new Set([
+  'America/Toronto', 'America/Vancouver', 'America/Edmonton',
+  'America/Winnipeg', 'America/Halifax', 'America/St_Johns',
+  'America/Regina', 'America/Whitehorse', 'America/Yellowknife',
+]);
+
+function detectCountry(): CountryCode {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz.startsWith('America/')) return CA_ZONES.has(tz) ? 'CA' : 'US';
+    if (tz === 'Europe/London') return 'GB';
+    if (tz.startsWith('Australia/')) return 'AU';
+    if (tz === 'Asia/Kolkata' || tz === 'Asia/Calcutta') return 'IN';
+    if (tz === 'Europe/Berlin') return 'DE';
+    if (tz === 'Europe/Paris') return 'FR';
+  } catch { /* fallthrough */ }
+  return 'XX';
+}
 
 export interface RegionPlatforms {
   countryCode: CountryCode;
@@ -13,10 +51,13 @@ export interface RegionPlatforms {
 }
 
 export function useRegionPlatforms(): RegionPlatforms {
-  return {
-    countryCode: 'XX',
-    flag: '🌍',
-    label: 'your region',
-    platforms: ['Netflix', 'Prime Video', 'Disney+', 'Apple TV+', 'MUBI'],
-  };
+  return useMemo(() => {
+    const code = detectCountry();
+    return {
+      countryCode: code,
+      flag: FLAGS[code],
+      label: LABELS[code],
+      platforms: PLATFORMS[code],
+    };
+  }, []);
 }

@@ -23,7 +23,11 @@ import Animated, {
 import { GradientText } from '@/components/GradientText';
 import { ChatBubble } from '@/components/ChatBubble';
 import { ClarificationChips } from '@/components/ClarificationChips';
+import { LoadingShimmer } from '@/components/LoadingShimmer';
+import { RecommendationCard } from '@/components/RecommendationCard';
+import { PlatformSelector } from '@/components/PlatformSelector';
 import { useAgent } from '@/hooks/useAgent';
+import { useRegionPlatforms } from '@/hooks/useRegionPlatforms';
 import type { ChatItem } from '@/hooks/useAgent';
 import {
   colors,
@@ -49,8 +53,10 @@ export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === 'web' && width >= DESKTOP_BREAKPOINT;
   const [input, setInput] = useState('');
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
   const scrollRef = useRef<ScrollView>(null);
-  const agent = useAgent();
+  const { countryCode } = useRegionPlatforms();
+  const agent = useAgent(countryCode, selectedPlatforms);
 
   // Floating animation for the telescope emoji (empty state only)
   const offsetY = useSharedValue(0);
@@ -94,18 +100,14 @@ export default function HomeScreen() {
             onSubmit={agent.submitClarification}
           />
         );
-      case 'cards': {
-        const summary = item.titles
-          .map(t => `• ${t.title} — ${t.platform}`)
-          .join('\n');
+      case 'cards':
         return (
-          <ChatBubble
-            key={item.id}
-            role="assistant"
-            text={`Found ${item.titles.length} title${item.titles.length !== 1 ? 's' : ''} on your platforms:\n\n${summary}`}
-          />
+          <View key={item.id} style={styles.cardsList}>
+            {item.titles.map(t => (
+              <RecommendationCard key={t.imdbId} title={t} />
+            ))}
+          </View>
         );
-      }
       default:
         return null;
     }
@@ -155,6 +157,11 @@ export default function HomeScreen() {
               </Text>
             </View>
 
+            <PlatformSelector
+              selected={selectedPlatforms}
+              onChange={setSelectedPlatforms}
+            />
+
             <View style={[styles.orDivider, isDesktop && styles.orDividerDesktop]}>
               <View style={styles.orLine} />
               <Text style={styles.orText}>quick start</Text>
@@ -179,7 +186,7 @@ export default function HomeScreen() {
           /* ── Chat messages ── */
           <View style={styles.messages}>
             {agent.items.map(renderItem)}
-            {agent.isLoading && <TypingIndicator text={agent.statusText} />}
+            {agent.isLoading && <LoadingShimmer statusText={agent.statusText} />}
           </View>
         )}
       </ScrollView>
@@ -221,23 +228,6 @@ export default function HomeScreen() {
   );
 }
 
-function TypingIndicator({ text }: { text: string | null }) {
-  return (
-    <View style={styles.typingRow}>
-      <LinearGradient
-        colors={gradients.dark}
-        start={gradientAngle.start}
-        end={gradientAngle.end}
-        style={styles.typingAvatar}
-      >
-        <Text style={styles.typingAvatarText}>✦</Text>
-      </LinearGradient>
-      <View style={styles.typingBubble}>
-        <Text style={styles.typingText}>{text ?? '…'}</Text>
-      </View>
-    </View>
-  );
-}
 
 const styles = StyleSheet.create({
   root: {
@@ -289,41 +279,10 @@ const styles = StyleSheet.create({
   messages: {
     gap: spacing.msgGap,
   },
+  cardsList: {
+    gap: spacing.cardGap,
+  },
 
-  // Typing indicator
-  typingRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-  },
-  typingAvatar: {
-    width: layout.avatarSize,
-    height: layout.avatarSize,
-    borderRadius: radius.avatar,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  typingAvatarText: {
-    fontSize: 11,
-    color: colors.text,
-  },
-  typingBubble: {
-    paddingVertical: 10,
-    paddingHorizontal: 13,
-    backgroundColor: colors.surface2,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderTopLeftRadius: 3,
-    borderTopRightRadius: 14,
-    borderBottomLeftRadius: 14,
-    borderBottomRightRadius: 14,
-  },
-  typingText: {
-    fontFamily: fontFamily.body,
-    fontSize: fontSize.body,
-    color: colors.text2,
-  },
 
   // Empty state
   emptyState: {
