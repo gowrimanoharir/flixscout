@@ -20,6 +20,7 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
+import { StarfieldBackground } from '@/components/StarfieldBackground';
 import { GradientText } from '@/components/GradientText';
 import { ChatBubble } from '@/components/ChatBubble';
 import { ClarificationChips } from '@/components/ClarificationChips';
@@ -113,6 +114,8 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
+
+      <StarfieldBackground />
 
       {/* ── Nav ── */}
       <View style={[styles.nav, { paddingHorizontal: isDesktop ? 48 : 20 }]}>
