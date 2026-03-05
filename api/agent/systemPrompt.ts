@@ -48,7 +48,7 @@ history, horror, music, mystery, romance, science-fiction, sport, thriller, war,
 Rules:
 - keyword: only set when the user mentions a specific topic, theme, or title fragment that would appear in a show's actual title or description text (e.g. "zombie", "heist", "based on true story"). Never put language names, platform names, release timing ("new release", "recent"), or genre words into keyword — those belong in their own fields. If the request is fully captured by language + genres + year + platforms, set keyword to null.
 - genres should capture the primary genre(s) when clearly stated
-- language: only set when the user explicitly asks for a specific language (e.g. "French films", "Korean movies")
+- language: only set when the user names a specific language or a single-language country (e.g. "French films" → fr, "Korean movies" → ko, "Japanese anime" → ja, "Hindi movie" → hi, "Tamil film" → ta). Do NOT infer language from country demonyms that are multilingual — "Indian movies" has no single language (Hindi, Tamil, Telugu, Malayalam etc. are all Indian). Leave language null for those cases so clarification can ask.
 - platforms: extract service names exactly as mentioned in the message or clarification answers (e.g. "Netflix", "Prime Video"). Do not convert to slugs — the system resolves names to service IDs.
 - Omit null fields entirely
 - Use the clarification answers to fill in values the user chose`;

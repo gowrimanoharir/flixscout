@@ -20,31 +20,50 @@ npm test               # jest
 |---|---|
 | `expo/` | React Native + Expo app (Expo Router, RN Reanimated) |
 | `api/agent/` | Single Vercel serverless function — the BFF |
-| `agent/` | LangChain tools + system prompt, imported by the BFF |
+| `api/countries.ts` | BFF endpoint proxying `/countries` from Streaming Availability API |
 
 **Request flow:**
 
 ```
-Expo app → POST /api/agent { message, history }
-  → GuardRailCheck (blocks NSFW/off-topic — no API calls)
-  → AskClarification (streams chip questions, waits for user)
-  → SearchContent (OMDb) + CheckAvailability (RapidAPI) in parallel
-  → streams { type: "cards"|"message"|"questions", payload } back
+Expo app → POST /api/agent { message, clarificationAnswers?, country? }
+  → fetchCountryServices (Streaming Availability /countries — for clarification chips + platform slug resolution)
+  → GuardRailCheck (Claude semantic classifier — blocks NSFW/off-topic)
+  → AskClarification (skipped if clarificationAnswers is present, even if empty)
+  → buildSearchFilters (Claude intent extraction — returns structured JSON, never conversational)
+  → SearchContent (Streaming Availability /shows/search/filters)
+  → CheckAvailability (sync formatter — filters by subscription/free, labels add-ons, top 5 by rating)
+  → streams { type: "cards"|"message"|"questions"|"status"|"error", payload } back
 ```
 
-The client **never** calls OMDb or RapidAPI directly. All keys are server-side only.
+The client **never** calls the Streaming Availability API directly. All keys are server-side only.
 
-**The four agent tools** (`agent/tools/`):
-- `guardRailCheck` — keyword blocklist + Claude semantic check, returns `{ allowed, reason? }`
-- `askClarification` — 1–5 questions, returns `{ questions: [{ question, options[] }] }`
-- `searchContent` — OMDb `?s=` keyword search, always `include_adult=false`, returns top 10 with `imdbId`
-- `checkAvailability` — RapidAPI Streaming Availability, filters unavailable titles out entirely
+**The four agent tools** (`api/agent/tools/`):
+- `guardRailCheck` — Claude semantic ALLOW/BLOCK classifier with its own `CLASSIFIER_SYSTEM` prompt
+- `askClarification` — uses `SYSTEM_PROMPT` + clarification rules; returns `{ questions: [] }` for specific title lookups ("where can I watch X")
+- `searchContent` — calls Streaming Availability `/shows/search/filters`; sends keyword only when no genres present; skips keyword when language+year fully describe the request
+- `checkAvailability` — sync formatter; prefers `subscription`/`free` streaming options; falls back to `addon` labelled as "Service (add-on)"; post-filters by runtime; sorts by rating; returns top 5
+
+**Prompt architecture:**
+- `SYSTEM_PROMPT` — FlixScout identity, rules, tone. Used in `askClarification` only.
+- `INTENT_EXTRACTION_PROMPT` — standalone JSON extractor, no persona, no questions. Used in `buildSearchFilters` only. Injects `new Date().getFullYear()` for relative date expressions.
+- `CLASSIFIER_SYSTEM` (in `guardRailCheck`) — dedicated ALLOW/BLOCK prompt, self-contained.
+
+**Platform resolution:**
+- `/api/countries` proxies Streaming Availability `/countries`, returns `{ services: { id, name }[] }`, 24h cache
+- `useCountryServices` hook (client) fetches and caches per country code
+- Orchestrator resolves service names → IDs using `resolveToServiceIds` before sending `catalogs` param
+- LLM extracts service names as-mentioned; orchestrator matches to API `service.id`
+
+**Clarification flow:**
+- `clarificationAnswers === undefined` → first request, run `askClarification`
+- `clarificationAnswers` is any object (even `{}`) → user submitted chips, skip to search
+- Submitting with no selections is valid and proceeds to search
 
 **Guardrail rule:** Agent may only surface titles returned by `checkAvailability`. Zero hallucination.
 
 ## Design
 
-Primary reference: `flixscout-final.html` (read this file for all component structure + interaction states).
+Primary reference: `flixscout-final.html` at `C:\Users\JJr\Documents\OverclockAccel\Homeworks\flixscout\flixscout-final.html` (outside the project repo).
 
 **Gradient rule — non-negotiable:**
 - Light `#93C5FD → #C4B5FD` → text/outline context only (logo, selected chip borders)
@@ -55,16 +74,16 @@ Design tokens live in `expo/theme/colors.ts` and `expo/theme/fonts.ts`.
 
 **Five screen states** (all prototyped in `flixscout-final.html`): empty, clarification, loading, results, no-results.
 
+**Starfield background:** `expo/components/StarfieldBackground.tsx` — 90 seeded-deterministic twinkling dots, Reanimated, absoluteFill behind all content.
+
 ## Environment Variables
 
-All six are required — the app throws on startup if any are missing.
+Three are required:
 
 ```
-LLM_API_KEY          # LLM API key
-CONTENT_API_KEY      # Content search API key
-CONTENT_API_BASE     # Content search API base URL (e.g. https://www.omdbapi.com)
-STREAMING_API_KEY    # Streaming availability API key
-STREAMING_API_BASE   # Streaming availability API base URL (e.g. https://streaming-availability.p.rapidapi.com)
+LLM_API_KEY          # Anthropic API key
+STREAMING_API_KEY    # Streaming Availability RapidAPI key
+STREAMING_API_BASE   # e.g. https://streaming-availability.p.rapidapi.com
 ```
 
 Note: the streaming API host header is derived automatically from `STREAMING_API_BASE` — no separate var needed.
@@ -81,10 +100,10 @@ Build phases in order — do not skip ahead without confirmation:
 2. ✅ Design tokens extraction
 3. ✅ BFF API route + LangChain setup
 4. ✅ Agent tools
-5. System prompt
-6a. Deps + fonts + screen shell + empty state
-6b. Input + useAgent streaming hook + real LLM (guardrail blocked message + clarification chips)
-6c. Search + availability APIs connected — RecommendationCard + no-results + PlatformSelector + loading shimmer
+5. ✅ System prompt
+6a. ✅ Deps + fonts + screen shell + empty state
+6b. ✅ Input + useAgent streaming hook + real LLM (guardrail blocked message + clarification chips)
+6c. ✅ Search + availability APIs connected — RecommendationCard + no-results + loading shimmer
 7. Session persistence
 8. Guardrail tests
 9. Vercel deployment config + README
