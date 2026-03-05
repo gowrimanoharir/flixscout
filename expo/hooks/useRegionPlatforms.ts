@@ -2,17 +2,6 @@ import { useMemo } from 'react';
 
 export type CountryCode = 'CA' | 'US' | 'GB' | 'AU' | 'IN' | 'DE' | 'FR' | 'XX';
 
-const PLATFORMS: Record<CountryCode, string[]> = {
-  US: ['Netflix', 'Prime Video', 'Disney+', 'Apple TV+', 'Max', 'Hulu', 'Peacock', 'Paramount+', 'MUBI'],
-  CA: ['Netflix', 'Prime Video', 'Disney+', 'Apple TV+', 'Crave', 'MUBI'],
-  GB: ['Netflix', 'Prime Video', 'Disney+', 'Apple TV+', 'ITVX', 'Channel 4', 'BBC iPlayer', 'MUBI'],
-  AU: ['Netflix', 'Prime Video', 'Disney+', 'Apple TV+', 'Stan', 'BINGE', 'MUBI'],
-  IN: ['Netflix', 'Prime Video', 'Disney+ Hotstar', 'Apple TV+', 'ZEE5', 'SonyLIV', 'MUBI'],
-  DE: ['Netflix', 'Prime Video', 'Disney+', 'Apple TV+', 'MUBI', 'ARD Mediathek'],
-  FR: ['Netflix', 'Prime Video', 'Disney+', 'Apple TV+', 'Canal+', 'MUBI'],
-  XX: ['Netflix', 'Prime Video', 'Disney+', 'Apple TV+', 'MUBI'],
-};
-
 const FLAGS: Record<CountryCode, string> = {
   US: '🇺🇸', CA: '🇨🇦', GB: '🇬🇧', AU: '🇦🇺',
   IN: '🇮🇳', DE: '🇩🇪', FR: '🇫🇷', XX: '🌍',
@@ -47,17 +36,11 @@ export interface RegionPlatforms {
   countryCode: CountryCode;
   flag: string;
   label: string;
-  platforms: string[];
 }
 
 export function useRegionPlatforms(): RegionPlatforms {
   return useMemo(() => {
     const code = detectCountry();
-    return {
-      countryCode: code,
-      flag: FLAGS[code],
-      label: LABELS[code],
-      platforms: PLATFORMS[code],
-    };
+    return { countryCode: code, flag: FLAGS[code], label: LABELS[code] };
   }, []);
 }

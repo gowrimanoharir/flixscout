@@ -1,41 +1,43 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { colors, fontFamily, fontSize, radius } from '@/theme';
 import { useRegionPlatforms } from '@/hooks/useRegionPlatforms';
+import { useCountryServices } from '@/hooks/useCountryServices';
 
 interface Props {
-  selected: string[];
+  selected: string[];             // array of service id slugs e.g. ["netflix","prime"]
   onChange: (platforms: string[]) => void;
 }
 
 export function PlatformSelector({ selected, onChange }: Props) {
   const region = useRegionPlatforms();
+  const { services, loading } = useCountryServices(region.countryCode);
   const [customInput, setCustomInput] = useState('');
   const [customPlatforms, setCustomPlatforms] = useState<string[]>([]);
 
-  function toggle(platform: string) {
-    if (selected.includes(platform)) {
-      onChange(selected.filter(p => p !== platform));
+  function toggle(id: string) {
+    if (selected.includes(id)) {
+      onChange(selected.filter(p => p !== id));
     } else {
-      onChange([...selected, platform]);
+      onChange([...selected, id]);
     }
   }
 
   function addCustom() {
-    const name = customInput.trim();
-    if (!name) return;
-    if (!customPlatforms.includes(name)) {
-      setCustomPlatforms(prev => [...prev, name]);
+    const id = customInput.trim().toLowerCase();
+    if (!id) return;
+    if (!customPlatforms.includes(id)) {
+      setCustomPlatforms(prev => [...prev, id]);
     }
-    if (!selected.includes(name)) {
-      onChange([...selected, name]);
+    if (!selected.includes(id)) {
+      onChange([...selected, id]);
     }
     setCustomInput('');
   }
 
-  function removeCustom(platform: string) {
-    setCustomPlatforms(prev => prev.filter(p => p !== platform));
-    onChange(selected.filter(p => p !== platform));
+  function removeCustom(id: string) {
+    setCustomPlatforms(prev => prev.filter(p => p !== id));
+    onChange(selected.filter(p => p !== id));
   }
 
   return (
@@ -54,39 +56,43 @@ export function PlatformSelector({ selected, onChange }: Props) {
       </View>
 
       {/* Platform chips */}
-      <View style={styles.chips}>
-        {region.platforms.map(platform => {
-          const isSelected = selected.includes(platform);
-          return (
-            <TouchableOpacity
-              key={platform}
-              style={[styles.chip, isSelected && styles.chipSelected]}
-              onPress={() => toggle(platform)}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
-                {platform}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-
-        {customPlatforms.map(platform => {
-          const isSelected = selected.includes(platform);
-          return (
-            <View key={platform} style={[styles.chip, styles.customChip, isSelected && styles.chipSelected]}>
-              <TouchableOpacity onPress={() => toggle(platform)} activeOpacity={0.7}>
+      {loading ? (
+        <ActivityIndicator size="small" color={colors.accentSky} style={styles.loader} />
+      ) : (
+        <View style={styles.chips}>
+          {services.map(({ id, name }) => {
+            const isSelected = selected.includes(id);
+            return (
+              <TouchableOpacity
+                key={id}
+                style={[styles.chip, isSelected && styles.chipSelected]}
+                onPress={() => toggle(id)}
+                activeOpacity={0.7}
+              >
                 <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
-                  {platform}
+                  {name}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => removeCustom(platform)} style={styles.removeBtn}>
-                <Text style={styles.removeBtnText}>×</Text>
-              </TouchableOpacity>
-            </View>
-          );
-        })}
-      </View>
+            );
+          })}
+
+          {customPlatforms.map(id => {
+            const isSelected = selected.includes(id);
+            return (
+              <View key={id} style={[styles.chip, styles.customChip, isSelected && styles.chipSelected]}>
+                <TouchableOpacity onPress={() => toggle(id)} activeOpacity={0.7}>
+                  <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+                    {id}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => removeCustom(id)} style={styles.removeBtn}>
+                  <Text style={styles.removeBtnText}>×</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+        </View>
+      )}
 
       {/* Add custom service */}
       <View style={styles.addRow}>
@@ -146,6 +152,10 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.bodyMed,
     fontSize: fontSize.meta,
     color: colors.accentSky,
+  },
+  loader: {
+    alignSelf: 'flex-start',
+    marginVertical: 4,
   },
   chips: {
     flexDirection: 'row',

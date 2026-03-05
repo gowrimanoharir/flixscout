@@ -10,6 +10,7 @@ import type { SearchContentInput } from './tools/searchContent';
 export interface SearchFilters extends Omit<SearchContentInput, 'country' | 'platforms'> {
   runtimeMin?: number;
   runtimeMax?: number;
+  platforms?: string[]; // service slugs extracted from message/clarification answers
 }
 
 function buildUserMessage(
@@ -55,5 +56,6 @@ export async function buildSearchFilters(
     yearTo: typeof parsed.yearTo === 'number' ? parsed.yearTo : undefined,
     runtimeMin: typeof parsed.runtimeMin === 'number' ? parsed.runtimeMin : undefined,
     runtimeMax: typeof parsed.runtimeMax === 'number' ? parsed.runtimeMax : undefined,
+    platforms: Array.isArray(parsed.platforms) ? parsed.platforms.map(String) : undefined,
   };
 }

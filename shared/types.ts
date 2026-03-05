@@ -47,5 +47,4 @@ export interface AgentRequestBody {
   clarificationAnswers?: Record<string, string[]>;
   // Detected on client via Intl.DateTimeFormat
   country?: string;
-  platforms?: string[];
 }

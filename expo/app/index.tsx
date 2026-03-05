@@ -25,7 +25,6 @@ import { ChatBubble } from '@/components/ChatBubble';
 import { ClarificationChips } from '@/components/ClarificationChips';
 import { LoadingShimmer } from '@/components/LoadingShimmer';
 import { RecommendationCard } from '@/components/RecommendationCard';
-import { PlatformSelector } from '@/components/PlatformSelector';
 import { useAgent } from '@/hooks/useAgent';
 import { useRegionPlatforms } from '@/hooks/useRegionPlatforms';
 import type { ChatItem } from '@/hooks/useAgent';
@@ -53,10 +52,9 @@ export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === 'web' && width >= DESKTOP_BREAKPOINT;
   const [input, setInput] = useState('');
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
   const scrollRef = useRef<ScrollView>(null);
   const { countryCode } = useRegionPlatforms();
-  const agent = useAgent(countryCode, selectedPlatforms);
+  const agent = useAgent(countryCode);
 
   // Floating animation for the telescope emoji (empty state only)
   const offsetY = useSharedValue(0);
@@ -156,11 +154,6 @@ export default function HomeScreen() {
                 , mood, language, runtime, anything. Or tap a suggestion to start.
               </Text>
             </View>
-
-            <PlatformSelector
-              selected={selectedPlatforms}
-              onChange={setSelectedPlatforms}
-            />
 
             <View style={[styles.orDivider, isDesktop && styles.orDividerDesktop]}>
               <View style={styles.orLine} />

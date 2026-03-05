@@ -35,7 +35,8 @@ Return ONLY valid JSON — no markdown, no extra text — matching this exact sh
   "yearFrom": number | null,
   "yearTo": number | null,
   "runtimeMin": number (minutes) | null,
-  "runtimeMax": number (minutes) | null
+  "runtimeMax": number (minutes) | null,
+  "platforms": ["Service Name as user mentioned"] | null
 }
 
 Valid genre slugs (use only these exact values):
@@ -46,5 +47,6 @@ Rules:
 - keyword should describe mood, theme, setting, or tone — not be a genre word alone
 - genres should capture the primary genre(s) when clearly stated
 - language: only set when the user explicitly asks for a specific language (e.g. "French films")
+- platforms: extract service names exactly as mentioned in the message or clarification answers (e.g. "Netflix", "Prime Video"). Do not convert to slugs — the system resolves names to service IDs.
 - Omit null fields entirely
 - Use the clarification answers to fill in values the user chose`;

@@ -10,9 +10,12 @@ import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { getLLM } from '../llm';
 import { extractJson } from '../utils';
 import type { ClarificationQuestion } from '../../../shared/types';
+import type { ServiceOption } from './countryServices';
 
 export const askClarificationSchema = z.object({
   prompt: z.string().describe('The user prompt to generate clarifying questions for'),
+  services: z.array(z.object({ id: z.string(), name: z.string() })).optional()
+    .describe('Streaming services available in the user\'s country'),
 });
 
 export type AskClarificationInput = z.infer<typeof askClarificationSchema>;
@@ -21,16 +24,24 @@ export interface AskClarificationOutput {
   questions: ClarificationQuestion[];
 }
 
-const SYSTEM = `You generate clarifying questions for a movie and TV show recommendation chatbot.
-Rules:
+function buildSystem(services: ServiceOption[]): string {
+  const servicesSection = services.length
+    ? `## Available streaming services for this user\n${services.map((s) => `- ${s.name}`).join('\n')}\n\n`
+    : '';
+
+  return `You generate clarifying questions for a movie and TV show recommendation chatbot.
+
+${servicesSection}## Rules
 - If the prompt already mentions genre AND platform, return at most 1 question
 - If the prompt is vague, return up to 5 questions
 - Never ask about information already given in the prompt
-- Each question must have exactly 3–4 short option labels (2–5 words each)
+- Each question must have exactly 3–5 short option labels (2–5 words each)
 - Topics to ask about: type (movie or show), mood/genre, runtime, content rating, platforms, language
+- When asking about platforms, pick the 3–5 most popular ones from the available services list above
 - Return ONLY valid JSON with no markdown fences:
   {"questions": [{"question": "...", "options": ["A", "B", "C"]}]}
 - If the prompt is specific enough to search without further input, return {"questions": []}`;
+}
 
 export async function askClarification(
   input: AskClarificationInput
@@ -38,7 +49,7 @@ export async function askClarification(
   const llm = getLLM();
 
   const response = await llm.invoke([
-    new SystemMessage(SYSTEM),
+    new SystemMessage(buildSystem((input.services as ServiceOption[]) ?? [])),
     new HumanMessage(input.prompt),
   ]);
 
