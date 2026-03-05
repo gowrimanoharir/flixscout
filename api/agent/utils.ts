@@ -1,6 +1,5 @@
 // Extracts the first JSON object from an LLM response string.
-// Handles markdown code fences (```json ... ```) that models sometimes emit
-// despite being told not to.
+// Handles markdown code fences and prose wrapping around the JSON object.
 export function extractJson(raw: unknown): string {
   const text = typeof raw === 'string' ? raw : JSON.stringify(raw);
 
@@ -8,6 +7,9 @@ export function extractJson(raw: unknown): string {
   const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenceMatch) return fenceMatch[1].trim();
 
-  // Otherwise return the trimmed text as-is
+  // Extract the outermost {...} block in case the LLM added prose around the JSON
+  const braceMatch = text.match(/\{[\s\S]*\}/);
+  if (braceMatch) return braceMatch[0];
+
   return text.trim();
 }

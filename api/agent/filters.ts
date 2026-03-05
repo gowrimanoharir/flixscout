@@ -45,6 +45,7 @@ export async function buildSearchFilters(
   try {
     parsed = JSON.parse(extractJson(response.content));
   } catch {
+    console.error('[Filters] LLM response unparseable:', JSON.stringify(response.content).slice(0, 500));
     throw new Error('Failed to parse intent from LLM response. Please try again.');
   }
 
