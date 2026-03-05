@@ -33,9 +33,11 @@ export async function buildSearchFilters(
   clarificationAnswers: Record<string, string[]>
 ): Promise<SearchFilters> {
   const llm = getLLM();
+  const currentYear = new Date().getFullYear();
+  const systemPrompt = `${INTENT_EXTRACTION_PROMPT}\n\nCurrent year: ${currentYear}. Use this for all relative date expressions (e.g. "last 3 years" → yearFrom = ${currentYear - 3}, "this year" → yearFrom = ${currentYear}, "last month" → yearFrom = ${currentYear}).`;
 
   const response = await llm.invoke([
-    new SystemMessage(INTENT_EXTRACTION_PROMPT),
+    new SystemMessage(systemPrompt),
     new HumanMessage(buildUserMessage(message, clarificationAnswers)),
   ]);
 
