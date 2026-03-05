@@ -36,6 +36,11 @@ function pickOption(
 export function checkAvailability(input: CheckAvailabilityInput): AvailableTitle[] {
   const { results, country, platforms, runtimeMin, runtimeMax } = input;
 
+  if (results.length > 0) {
+    console.log('[Availability] first result streamingOptions:', JSON.stringify(results[0].streamingOptions).slice(0, 500));
+    console.log('[Availability] filtering for country:', country.toLowerCase(), '| platforms:', platforms);
+  }
+
   const available: Array<AvailableTitle & { _rating: number }> = [];
 
   for (const result of results) {
