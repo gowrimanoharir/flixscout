@@ -16,21 +16,34 @@ export interface CheckAvailabilityInput {
 
 export type { AvailableTitle };
 
+const PREFERRED_TYPES = new Set(['subscription', 'free']);
+
 function pickOption(
   streamingOptions: Record<string, StreamingOption[]>,
   country: string,
   platforms: string[]
-): StreamingOption | null {
-  const options = streamingOptions[country.toLowerCase()];
-  if (!Array.isArray(options) || !options.length) return null;
+): { option: StreamingOption; isAddon: boolean } | null {
+  const all = streamingOptions[country.toLowerCase()];
+  if (!Array.isArray(all) || !all.length) return null;
 
-  if (!platforms.length) return options[0];
+  const preferred = all.filter((opt) => PREFERRED_TYPES.has(opt.type));
+  const addons    = all.filter((opt) => opt.type === 'addon');
 
-  return (
-    options.find((opt) =>
+  // Helper: find matching platform in a candidate list
+  function findMatch(candidates: StreamingOption[]) {
+    if (!platforms.length) return candidates[0] ?? null;
+    return candidates.find((opt) =>
       platforms.some((p) => opt.service.id.toLowerCase() === p.toLowerCase())
-    ) ?? null
-  );
+    ) ?? null;
+  }
+
+  const match = findMatch(preferred);
+  if (match) return { option: match, isAddon: false };
+
+  const addonMatch = findMatch(addons);
+  if (addonMatch) return { option: addonMatch, isAddon: true };
+
+  return null;
 }
 
 export function checkAvailability(input: CheckAvailabilityInput): AvailableTitle[] {
@@ -50,13 +63,16 @@ export function checkAvailability(input: CheckAvailabilityInput): AvailableTitle
     if (runtimeMin != null && (result.runtime === 0 || result.runtime < runtimeMin)) continue;
     if (runtimeMax != null && (result.runtime === 0 || result.runtime > runtimeMax)) continue;
 
-    const option = pickOption(result.streamingOptions, country, platforms);
-    if (!option) continue;
+    const picked = pickOption(result.streamingOptions, country, platforms);
+    if (!picked) continue;
+
+    const { option, isAddon } = picked;
+    const platformLabel = isAddon ? `${option.service.name} (add-on)` : option.service.name;
 
     available.push({
       imdbId: result.imdbId,
       title: result.title,
-      platform: option.service.name,
+      platform: platformLabel,
       streamUrl: option.link,
       audioLanguages: (option.audios ?? []).map((a) => a.language),
       videoQuality: option.videoQuality ?? 'sd',

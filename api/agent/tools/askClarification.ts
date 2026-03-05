@@ -40,7 +40,8 @@ ${servicesSection}## Rules
 - When asking about platforms, pick the 3–5 most popular ones from the available services list above
 - Return ONLY valid JSON with no markdown fences:
   {"questions": [{"question": "...", "options": ["A", "B", "C"]}]}
-- If the prompt is specific enough to search without further input, return {"questions": []}`;
+- If the prompt is specific enough to search without further input, return {"questions": []}
+- ALWAYS return {"questions": []} when the user names a specific title or asks "where can I watch X" — they want to discover available platforms, so never ask for platform or any other clarification`;
 }
 
 export async function askClarification(

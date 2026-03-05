@@ -60,7 +60,7 @@ export async function runOrchestrator(
 ): Promise<void> {
   const {
     message,
-    clarificationAnswers = {},
+    clarificationAnswers, // undefined = first request; {} = user submitted chips (even if empty)
     country = 'US',
   } = body;
 
@@ -79,10 +79,10 @@ export async function runOrchestrator(
       return;
     }
 
-    // ── Step 2: AskClarification (skip if answers already provided) ──────
-    const hasClarification = Object.keys(clarificationAnswers).length > 0;
-
-    if (!hasClarification) {
+    // ── Step 2: AskClarification (skip if user already submitted chip answers) ──
+    // clarificationAnswers === undefined means first request; any object (even {}) means
+    // the user has already seen and submitted the clarification step — proceed to search.
+    if (clarificationAnswers === undefined) {
       emit(res, { type: 'status', payload: 'Preparing questions…' });
 
       const { questions } = await askClarification({ prompt: message, services });
@@ -96,13 +96,15 @@ export async function runOrchestrator(
     // ── Step 3: SearchContent ────────────────────────────────────────────
     emit(res, { type: 'status', payload: 'Searching for content…' });
 
+    const answers = clarificationAnswers ?? {};
+
     const { runtimeMin, runtimeMax, platforms: llmPlatformNames, ...searchFilters } =
-      await buildSearchFilters(message, clarificationAnswers);
+      await buildSearchFilters(message, answers);
 
     // Resolve platform names → service IDs from both LLM extraction and clarification answers
     const platforms = [
       ...resolveToServiceIds(llmPlatformNames ?? [], services),
-      ...platformsFromAnswers(clarificationAnswers, services),
+      ...platformsFromAnswers(answers, services),
     ].filter((id, i, arr) => arr.indexOf(id) === i); // deduplicate
 
     console.log('[Orchestrator] resolved platforms:', platforms);
