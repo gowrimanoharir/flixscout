@@ -12,43 +12,58 @@ interface Props {
 export function ClarificationChips({ questions, onSubmit }: Props) {
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
 
-  function toggle(question: string, option: string) {
+  function toggle(question: string, option: string, multiSelect: boolean) {
     setAnswers(prev => {
       const current = prev[question] ?? [];
       const isSelected = current.includes(option);
+      if (multiSelect) {
+        return {
+          ...prev,
+          [question]: isSelected
+            ? current.filter(o => o !== option)
+            : [...current, option],
+        };
+      }
+      // Single-select: selecting a new option replaces the previous one
       return {
         ...prev,
-        [question]: isSelected
-          ? current.filter(o => o !== option)
-          : [...current, option],
+        [question]: isSelected ? [] : [option],
       };
     });
   }
 
   return (
     <View style={styles.container}>
-      {questions.map(q => (
-        <View key={q.question} style={styles.block}>
-          <Text style={styles.questionText}>{q.question}</Text>
-          <View style={styles.chips}>
-            {q.options.map(opt => {
-              const selected = (answers[q.question] ?? []).includes(opt);
-              return (
-                <TouchableOpacity
-                  key={opt}
-                  style={[styles.chip, selected && styles.chipSelected]}
-                  onPress={() => toggle(q.question, opt)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                    {opt}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+      {questions.map(q => {
+        const multi = q.multiSelect !== false;
+        return (
+          <View key={q.question} style={styles.block}>
+            <View style={styles.questionRow}>
+              <Text style={styles.questionText}>{q.question}</Text>
+              {!multi && (
+                <Text style={styles.selectOneHint}>Select one</Text>
+              )}
+            </View>
+            <View style={styles.chips}>
+              {q.options.map(opt => {
+                const selected = (answers[q.question] ?? []).includes(opt);
+                return (
+                  <TouchableOpacity
+                    key={opt}
+                    style={[styles.chip, selected && styles.chipSelected]}
+                    onPress={() => toggle(q.question, opt, multi)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                      {opt}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
-        </View>
-      ))}
+        );
+      })}
 
       <TouchableOpacity onPress={() => onSubmit(answers)} activeOpacity={0.8}>
           <LinearGradient
@@ -73,10 +88,20 @@ const styles = StyleSheet.create({
   block: {
     gap: 7,
   },
+  questionRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+  },
   questionText: {
     fontFamily: fontFamily.bodyMed,
     fontSize: fontSize.body,
     color: colors.text,
+  },
+  selectOneHint: {
+    fontFamily: fontFamily.body,
+    fontSize: fontSize.meta,
+    color: colors.text3,
   },
   chips: {
     flexDirection: 'row',

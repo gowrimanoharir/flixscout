@@ -41,7 +41,8 @@ ${servicesSection}## Rules
 - Topics to ask about: type (movie or show), mood/genre, runtime, content rating, platforms, language
 - When asking about platforms, pick the 3–5 most popular ones from the available services list above
 - Return ONLY valid JSON with no markdown fences:
-  {"questions": [{"question": "...", "options": ["A", "B", "C"]}]}
+  {"questions": [{"question": "...", "options": ["A", "B", "C"], "multiSelect": true}]}
+- Set "multiSelect": false for questions where only one answer makes sense (language, content type). Set "multiSelect": true for questions where multiple answers are valid (platforms, genres, mood).
 - If the prompt is specific enough to search without further input, return {"questions": []}
 - ALWAYS return {"questions": []} when the user names a specific title or asks "where can I watch X" — they want to discover available platforms, so never ask for platform or any other clarification`;
 }
@@ -58,9 +59,10 @@ export async function askClarification(
 
   const parsed = JSON.parse(extractJson(response.content));
   const questions: ClarificationQuestion[] = (parsed.questions ?? []).map(
-    (q: { question: string; options: string[] }) => ({
+    (q: { question: string; options: string[]; multiSelect?: boolean }) => ({
       question: String(q.question),
       options: Array.isArray(q.options) ? q.options.map(String) : [],
+      multiSelect: q.multiSelect !== false, // default true unless explicitly false
     })
   );
   return { questions };

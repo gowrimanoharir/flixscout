@@ -21,6 +21,7 @@ export interface AgentEvent<T = unknown> {
 export interface ClarificationQuestion {
   question: string;
   options: string[];
+  multiSelect?: boolean; // defaults to true; set false for mutually exclusive choices (e.g. language)
 }
 
 export interface AvailableTitle {
