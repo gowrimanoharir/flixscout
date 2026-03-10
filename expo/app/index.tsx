@@ -120,8 +120,15 @@ export default function HomeScreen() {
       {/* ── Nav ── */}
       <View style={[styles.nav, { paddingHorizontal: isDesktop ? 48 : 20 }]}>
         <GradientText style={styles.logoText}>FlixScout</GradientText>
-        <View style={styles.navBadge}>
-          <Text style={styles.navBadgeText}>Beta</Text>
+        <View style={styles.navRight}>
+          {hasActivity && !agent.isLoading && (
+            <TouchableOpacity onPress={agent.clearChat} activeOpacity={0.7} style={styles.newChatBtn}>
+              <Text style={styles.newChatText}>New chat</Text>
+            </TouchableOpacity>
+          )}
+          <View style={styles.navBadge}>
+            <Text style={styles.navBadgeText}>Beta</Text>
+          </View>
         </View>
       </View>
 
@@ -176,6 +183,18 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+
+            {agent.hasHistory && (
+              <View style={styles.historyHint}>
+                <Text style={styles.historyHintLabel}>✦ Last asked</Text>
+                <Text style={styles.historyHintMsg} numberOfLines={1}>
+                  {agent.lastUserMessage}
+                </Text>
+                <TouchableOpacity onPress={agent.clearChat} activeOpacity={0.7}>
+                  <Text style={styles.historyHintClear}>Clear</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
           </View>
         ) : (
@@ -246,6 +265,53 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.logo,
     fontSize: fontSize.logo,
     letterSpacing: letterSpacing.logo,
+  },
+  historyHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: colors.skyAlpha05,
+    borderWidth: 1,
+    borderColor: colors.skyAlpha12,
+    borderRadius: radius.pill,
+    paddingVertical: 6,
+    paddingHorizontal: 13,
+    maxWidth: 340,
+  },
+  historyHintLabel: {
+    fontFamily: fontFamily.bodyMed,
+    fontSize: fontSize.chip,
+    color: colors.accentSky,
+    flexShrink: 0,
+  },
+  historyHintMsg: {
+    flex: 1,
+    fontFamily: fontFamily.body,
+    fontSize: fontSize.chip,
+    color: colors.text2,
+  },
+  historyHintClear: {
+    fontFamily: fontFamily.bodyMed,
+    fontSize: fontSize.chip,
+    color: colors.text3,
+    flexShrink: 0,
+  },
+  navRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  newChatBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 11,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border2,
+  },
+  newChatText: {
+    fontFamily: fontFamily.bodyMed,
+    fontSize: fontSize.navBadge,
+    color: colors.text2,
   },
   navBadge: {
     backgroundColor: colors.surface2,

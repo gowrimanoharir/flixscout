@@ -132,5 +132,19 @@ export function useAgent(country?: string) {
     send(pendingMessageRef.current, answers);
   }
 
-  return { items, statusText, isLoading, send, submitClarification, clearSession: session.clearSession };
+  function clearChat() {
+    setItems([]);
+    session.clearSession();
+  }
+
+  return {
+    items,
+    statusText,
+    isLoading,
+    send,
+    submitClarification,
+    clearChat,
+    hasHistory: session.messages.length > 0,
+    lastUserMessage: [...session.messages].reverse().find(m => m.role === 'user')?.content ?? null,
+  };
 }
