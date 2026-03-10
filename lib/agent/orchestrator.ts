@@ -117,6 +117,14 @@ export async function runOrchestrator(
     );
 
     for await (const event of stream) {
+      if (event.event === 'on_tool_error') {
+        console.error('[Tool error]', event.name, JSON.stringify(event.data));
+      }
+
+      if (event.event === 'on_tool_start') {
+        console.log('[Tool input]', event.name, JSON.stringify(event.data?.input));
+      }
+
       if (event.event === 'on_tool_end' && event.name === 'findAvailableContent') {
         try {
           const parsed = JSON.parse(event.data.output as string) as AvailableTitle[];

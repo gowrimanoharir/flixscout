@@ -29,8 +29,14 @@ const findAvailableContentSchema = z.object({
   keyword: z.string().nullish().describe(
     'Word or phrase that appears in a title or description (e.g. "zombie", "heist"). Omit if the request is fully captured by other fields.'
   ),
-  type: z.enum(['movie', 'tv']).describe('Content type: movie or tv series'),
-  genres: z.array(z.string()).nullish().describe(
+  type: z.preprocess(
+    (v) => (v === 'show' || v === 'shows' || v === 'series') ? 'tv' : v,
+    z.enum(['movie', 'tv'])
+  ).describe('Content type: movie or tv series'),
+  genres: z.preprocess(
+    (v) => typeof v === 'string' ? v.split(',').map((s: string) => s.trim()).filter(Boolean) : v,
+    z.array(z.string()).nullish()
+  ).describe(
     'Genre slugs. Valid values: action, adventure, animation, comedy, crime, documentary, drama, fantasy, history, horror, music, mystery, romance, science-fiction, sport, thriller, war, western'
   ),
   language: z.string().nullish().describe(
