@@ -10,28 +10,15 @@ import { getLLM } from '../llm';
 import { extractJson } from '../utils';
 import type { AvailableTitle } from '../../../shared/types';
 
-const filterResultsInner = z.object({
-  results: z.string().describe(
-    'JSON array of AvailableTitle objects exactly as returned by findAvailableContent'
-  ),
+// Only criteria — results are injected via closure from orchestrator's pendingCards.
+// This prevents the LLM from having to copy-paste a large JSON blob between tools.
+const filterResultsSchema = z.object({
   criteria: z.string().describe(
-    'The user-defined filtering criteria that the search API could not express ' +
-    '(e.g. "not scary", "appropriate for a 5-year-old", "dark and mature tone", ' +
-    '"uplifting mood", "suitable for teens", "emotionally heavy")'
+    'Plain-language description of what to keep or remove — e.g. "not scary", ' +
+    '"appropriate for a 5-year-old", "uplifting mood", "suitable for teens", ' +
+    '"dark and mature", "emotionally heavy"'
   ),
 });
-
-// LLMs sometimes wrap tool args as { input: "{...}" } instead of passing fields directly.
-// Preprocess unwraps that pattern before Zod validates.
-const filterResultsSchema = z.preprocess(
-  (v: unknown) => {
-    if (v && typeof v === 'object' && 'input' in v && typeof (v as Record<string, unknown>).input === 'string') {
-      try { return JSON.parse((v as Record<string, unknown>).input as string); } catch {}
-    }
-    return v;
-  },
-  filterResultsInner
-);
 
 const FILTER_SYSTEM = `You are a content screener. You will receive a list of movies/TV shows with their title, year, genres, and overview, plus a filtering criteria. Select which titles match the criteria based ONLY on the provided information.
 
@@ -45,17 +32,12 @@ Rules:
 - If a title's overview is missing or ambiguous, include it (do not exclude on uncertainty)
 - Never introduce or infer titles that were not in the input list`;
 
-export function makeFilterTool() {
+export function makeFilterTool(getResults: () => AvailableTitle[]) {
   return tool(
     async (input) => {
-      let titles: AvailableTitle[];
-      try {
-        titles = JSON.parse(input.results) as AvailableTitle[];
-      } catch {
-        return input.results;
-      }
+      const titles = getResults();
 
-      if (!titles.length) return input.results;
+      if (!titles.length) return JSON.stringify([]);
 
       const llm = getLLM();
 
@@ -91,11 +73,10 @@ export function makeFilterTool() {
     {
       name: 'filterResults',
       description:
-        'Filter and reorder titles (from findAvailableContent) using criteria the search API cannot express — ' +
-        'such as content rating, emotional tone, mood, age-appropriateness, maturity level, or sensitivity. ' +
+        'Filter and reorder the results already returned by findAvailableContent, using criteria the search API cannot express — ' +
+        'such as emotional tone, mood, age-appropriateness, maturity level, or sensitivity. ' +
         'Call this ONLY when the user specifies filtering that cannot be covered by genres, language, year, rating, or platform. ' +
-        'Always call findAvailableContent first, then pass its raw output directly into this tool. ' +
-        'This tool only selects from the provided list — it never invents or adds titles.',
+        'Always call findAvailableContent first. Only pass a concise criteria string — do NOT pass the results list.',
       schema: filterResultsSchema,
     }
   );

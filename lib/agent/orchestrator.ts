@@ -93,8 +93,13 @@ export async function runOrchestrator(
         : [new AIMessage(msg.content)]
     );
 
+    // findAvailableContent results are accumulated across multiple calls (e.g. movie + tv)
+    // and deduplicated by imdbId. filterResults replaces the accumulated set.
+    // Declared before makeFilterTool so the closure captures the live variable.
+    let pendingCards: AvailableTitle[] = [];
+
     const searchTool = makeSearchTool(country, services);
-    const filterTool = makeFilterTool();
+    const filterTool = makeFilterTool(() => pendingCards);
     const tools = [searchTool, filterTool];
 
     const prompt = ChatPromptTemplate.fromMessages([
@@ -106,10 +111,6 @@ export async function runOrchestrator(
 
     const agent = createToolCallingAgent({ llm: getAgentLLM(), tools, prompt });
     const executor = new AgentExecutor({ agent, tools, maxIterations: 5 });
-
-    // findAvailableContent results are accumulated across multiple calls (e.g. movie + tv)
-    // and deduplicated by imdbId. filterResults replaces the accumulated set.
-    let pendingCards: AvailableTitle[] = [];
 
     const stream = executor.streamEvents(
       { input: inputText, chat_history: chatHistory },
