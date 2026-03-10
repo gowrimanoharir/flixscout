@@ -79,7 +79,8 @@ export function buildAgentSystemPrompt(
 
 ## Search phase
 Always call findAvailableContent first. Never suggest titles from your training data.
-Call findAvailableContent EXACTLY ONCE — pass ALL requested platforms together in the platforms array. Never split by platform into multiple calls.
+Pass ALL requested platforms together in the platforms array — never split by platform into multiple calls.
+You may call findAvailableContent twice only when the user explicitly wants both movies AND TV shows (call once with type=movie, once with type=tv). In all other cases call it exactly once.
 After findAvailableContent returns results, decide whether to call filterResults:
 - Call filterResults when the user specifies criteria the API cannot filter for — such as emotional tone, mood, age-appropriateness, content sensitivity, maturity level, or "not scary/dark/violent". Pass the raw output of findAvailableContent and a concise criteria string.
 - Do NOT call filterResults for criteria already handled by API parameters (genre, language, year, rating, platform).

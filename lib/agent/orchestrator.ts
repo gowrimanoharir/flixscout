@@ -107,8 +107,8 @@ export async function runOrchestrator(
     const agent = createToolCallingAgent({ llm: getAgentLLM(), tools, prompt });
     const executor = new AgentExecutor({ agent, tools });
 
-    // Collect the last tool output (filterResults overwrites findAvailableContent if called)
-    // Emit cards at chain end so the final set (filtered or not) is always used
+    // findAvailableContent results are accumulated across multiple calls (e.g. movie + tv)
+    // and deduplicated by imdbId. filterResults replaces the accumulated set.
     let pendingCards: AvailableTitle[] = [];
 
     const stream = executor.streamEvents(
@@ -117,13 +117,20 @@ export async function runOrchestrator(
     );
 
     for await (const event of stream) {
-      if (
-        event.event === 'on_tool_end' &&
-        (event.name === 'findAvailableContent' || event.name === 'filterResults')
-      ) {
+      if (event.event === 'on_tool_end' && event.name === 'findAvailableContent') {
         try {
           const parsed = JSON.parse(event.data.output as string) as AvailableTitle[];
-          if (Array.isArray(parsed)) pendingCards = parsed;
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const seen = new Set(pendingCards.map((c) => c.imdbId));
+            pendingCards = [...pendingCards, ...parsed.filter((c) => !seen.has(c.imdbId))];
+          }
+        } catch { /* ignore parse errors */ }
+      }
+
+      if (event.event === 'on_tool_end' && event.name === 'filterResults') {
+        try {
+          const parsed = JSON.parse(event.data.output as string) as AvailableTitle[];
+          if (Array.isArray(parsed)) pendingCards = parsed; // filtered set replaces accumulated
         } catch { /* ignore parse errors */ }
       }
 

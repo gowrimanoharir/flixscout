@@ -14,13 +14,16 @@ npm test               # jest
 
 ## Architecture
 
-**Three layers, one repo:**
+**Four layers, one repo:**
 
 | Folder | What it is |
 |---|---|
 | `expo/` | React Native + Expo app (Expo Router, RN Reanimated) |
-| `api/agent/` | Single Vercel serverless function — the BFF |
-| `api/countries.ts` | BFF endpoint proxying `/countries` from Streaming Availability API |
+| `api/agent/index.ts` | Vercel serverless function entry point — `/api/agent` |
+| `api/countries.ts` | Vercel serverless function — `/api/countries` (proxies Streaming Availability) |
+| `lib/agent/` | All BFF implementation (orchestrator, LLM, tools, prompts) — not a Vercel function |
+
+> Vercel Hobby plan allows max 12 serverless functions. Only files directly in `api/` are endpoints; `lib/` is bundled implementation code.
 
 **Request flow:**
 
@@ -47,11 +50,18 @@ Expo app → POST /api/agent { message, clarificationAnswers?, history?, country
 
 The client **never** calls the Streaming Availability API directly. All keys are server-side only.
 
-**API layer files** (`api/agent/`):
+**API endpoints** (`api/`):
 
 | File | Role |
 |---|---|
-| `orchestrator.ts` | Entry point; pre-flight gates + AgentExecutor wiring; NDJSON emission |
+| `api/agent/index.ts` | HTTP handler — parse/validate request, set NDJSON headers, call `runOrchestrator` |
+| `api/countries.ts` | Proxy `/api/countries?country=ca` → Streaming Availability `/countries`, 24h cache |
+
+**BFF implementation** (`lib/agent/`):
+
+| File | Role |
+|---|---|
+| `orchestrator.ts` | Pre-flight gates + AgentExecutor wiring; NDJSON emission |
 | `llm.ts` | `getLLM()` (1024 tokens, pre-flight) · `getAgentLLM()` (4096 tokens, agent phase) |
 | `systemPrompt.ts` | `SYSTEM_PROMPT` · `INTENT_EXTRACTION_PROMPT` · `buildAgentSystemPrompt()` |
 | `utils.ts` | `extractJson()` — strips fences, finds outermost `{…}` block |
