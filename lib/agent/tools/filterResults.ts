@@ -10,7 +10,7 @@ import { getLLM } from '../llm';
 import { extractJson } from '../utils';
 import type { AvailableTitle } from '../../../shared/types';
 
-const filterResultsSchema = z.object({
+const filterResultsInner = z.object({
   results: z.string().describe(
     'JSON array of AvailableTitle objects exactly as returned by findAvailableContent'
   ),
@@ -20,6 +20,18 @@ const filterResultsSchema = z.object({
     '"uplifting mood", "suitable for teens", "emotionally heavy")'
   ),
 });
+
+// LLMs sometimes wrap tool args as { input: "{...}" } instead of passing fields directly.
+// Preprocess unwraps that pattern before Zod validates.
+const filterResultsSchema = z.preprocess(
+  (v: unknown) => {
+    if (v && typeof v === 'object' && 'input' in v && typeof (v as Record<string, unknown>).input === 'string') {
+      try { return JSON.parse((v as Record<string, unknown>).input as string); } catch {}
+    }
+    return v;
+  },
+  filterResultsInner
+);
 
 const FILTER_SYSTEM = `You are a content screener. You will receive a list of movies/TV shows with their title, year, genres, and overview, plus a filtering criteria. Select which titles match the criteria based ONLY on the provided information.
 
