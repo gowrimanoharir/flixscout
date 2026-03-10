@@ -6,10 +6,11 @@
 //   3. askClarification     — human-in-the-loop; halts and waits for chip answers
 //
 // Agent phase (LangChain AgentExecutor):
-//   4. AgentExecutor with findAvailableContent tool
-//      — agent extracts intent, calls tool, generates narrative response
-//      — tool: searchContent → checkAvailability → returns AvailableTitle[] JSON
-//   5. Stream results via NDJSON events (cards + message)
+//   4. AgentExecutor with two tools:
+//      - findAvailableContent: searchContent → checkAvailability → AvailableTitle[] JSON
+//      - filterResults (optional): LLM post-filter for criteria the API cannot express
+//        (mood, tone, age-appropriateness, maturity). Only called when needed.
+//   5. Cards emitted at chain end using the last tool output (filtered if filterResults ran)
 //
 // Chat history from body.history is wired via MessagesPlaceholder for multi-turn context.
 
@@ -21,6 +22,7 @@ import { guardRailCheck } from './tools/guardRailCheck';
 import { askClarification } from './tools/askClarification';
 import { fetchCountryServices } from './tools/countryServices';
 import { makeSearchTool } from './tools/searchTool';
+import { makeFilterTool } from './tools/filterResults';
 import { getAgentLLM } from './llm';
 import { buildAgentSystemPrompt } from './systemPrompt';
 import type { AvailableTitle, AgentEvent, AgentRequestBody } from '../../shared/types';
@@ -92,6 +94,8 @@ export async function runOrchestrator(
     );
 
     const searchTool = makeSearchTool(country, services);
+    const filterTool = makeFilterTool();
+    const tools = [searchTool, filterTool];
 
     const prompt = ChatPromptTemplate.fromMessages([
       ['system', buildAgentSystemPrompt(country, services, currentYear, answers)],
@@ -100,16 +104,12 @@ export async function runOrchestrator(
       new MessagesPlaceholder('agent_scratchpad'),
     ]);
 
-    const agent = createToolCallingAgent({
-      llm: getAgentLLM(),
-      tools: [searchTool],
-      prompt,
-    });
+    const agent = createToolCallingAgent({ llm: getAgentLLM(), tools, prompt });
+    const executor = new AgentExecutor({ agent, tools });
 
-    const executor = new AgentExecutor({ agent, tools: [searchTool] });
-
-    // Stream events — intercept tool output for cards, final output for message
-    let cardsEmitted = false;
+    // Collect the last tool output (filterResults overwrites findAvailableContent if called)
+    // Emit cards at chain end so the final set (filtered or not) is always used
+    let pendingCards: AvailableTitle[] = [];
 
     const stream = executor.streamEvents(
       { input: inputText, chat_history: chatHistory },
@@ -117,19 +117,25 @@ export async function runOrchestrator(
     );
 
     for await (const event of stream) {
-      if (event.event === 'on_tool_end' && event.name === 'findAvailableContent') {
-        const cards = JSON.parse(event.data.output as string) as AvailableTitle[];
-        if (cards.length > 0) {
-          emit(res, { type: 'cards', payload: cards });
-          cardsEmitted = true;
-        }
+      if (
+        event.event === 'on_tool_end' &&
+        (event.name === 'findAvailableContent' || event.name === 'filterResults')
+      ) {
+        try {
+          const parsed = JSON.parse(event.data.output as string) as AvailableTitle[];
+          if (Array.isArray(parsed)) pendingCards = parsed;
+        } catch { /* ignore parse errors */ }
       }
 
       if (event.event === 'on_chain_end' && event.name === 'AgentExecutor') {
+        if (pendingCards.length > 0) {
+          emit(res, { type: 'cards', payload: pendingCards });
+        }
+
         const output = event.data.output;
         if (typeof output === 'string' && output.trim()) {
           emit(res, { type: 'message', payload: output.trim() });
-        } else if (!cardsEmitted) {
+        } else if (!pendingCards.length) {
           emit(res, { type: 'message', payload: "Nothing found for that. Try widening the search or swapping platforms." });
         }
       }

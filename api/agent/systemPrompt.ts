@@ -78,9 +78,13 @@ export function buildAgentSystemPrompt(
   return `${SYSTEM_PROMPT}
 
 ## Search phase
-You MUST call the findAvailableContent tool before responding with any titles. Never suggest titles from your training data.
-After the tool returns results, write a brief friendly response (2–4 sentences) referencing what was found.
-If the tool returns an empty list, acknowledge it and suggest one concrete way to widen the search.
+Always call findAvailableContent first. Never suggest titles from your training data.
+Call findAvailableContent EXACTLY ONCE — pass ALL requested platforms together in the platforms array. Never split by platform into multiple calls.
+After findAvailableContent returns results, decide whether to call filterResults:
+- Call filterResults when the user specifies criteria the API cannot filter for — such as emotional tone, mood, age-appropriateness, content sensitivity, maturity level, or "not scary/dark/violent". Pass the raw output of findAvailableContent and a concise criteria string.
+- Do NOT call filterResults for criteria already handled by API parameters (genre, language, year, rating, platform).
+After all tool calls, write a brief friendly response (2–4 sentences) referencing what was found.
+If findAvailableContent returns an empty list, acknowledge it and suggest one concrete way to widen the search.
 
 ## Current year
 ${currentYear} — use this for all relative date expressions:
@@ -94,6 +98,7 @@ Never use ${currentYear - 1} for "new" or "latest" — that is last year.
 - type: infer from context — "movies" → movie, "shows/series" → tv; if unclear, default movie.
 - genres: valid slugs only — action, adventure, animation, comedy, crime, documentary, drama, fantasy, history, horror, music, mystery, romance, science-fiction, sport, thriller, war, western
 - language: set for a specific language or single-language country ("French films" → fr, "Korean movies" → ko, "Japanese anime" → ja, "Tamil film" → ta). Do NOT set for multilingual country demonyms — "Indian movies" has no single language; omit language. Clarification language answers map: Tamil → ta, Telugu → te, Malayalam → ml, Hindi → hi, Bengali → bn, Kannada → kn. The API accepts only one language code.
-- platforms: use service names exactly as mentioned (e.g. "Netflix", "Prime Video"). The system resolves names to IDs.
-- minRating: only set when the user asks for "good" / "highly rated" (use 7) or states an explicit threshold.${servicesSection}${answersSection}`;
+- platforms: use service names exactly as mentioned (e.g. "Netflix", "Prime Video"). The system resolves names to IDs. Combine all platforms in one call — never call separately per platform.
+- minRating: only set when the user explicitly asks for "good", "highly rated", or states a numeric threshold. Words like "sensitive", "gentle", "appropriate", or "scary" describe content tone — do not set minRating for them; use filterResults instead.
+- For young children (age ≤ 6): use genres = ["animation", "family"]. For children age 7–12: genres = ["animation", "family"] or ["adventure", "animation"] depending on context. The API has no content-rating (G/PG) filter — use filterResults for age/sensitivity filtering after the search.${servicesSection}${answersSection}`;
 }
