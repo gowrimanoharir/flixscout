@@ -1,57 +1,35 @@
-// Agent orchestration — sequences the four tools in plain TypeScript
+// Agent orchestration
 //
-// Flow:
-//   1. Fetch country services (needed for clarification options + platform slug resolution)
-//   2. GuardRailCheck   — always first, blocks NSFW / off-topic
-//   3. AskClarification — human-in-the-loop, halts and waits for chip answers
-//   4. SearchContent    — single API call returns results + streaming options
-//   5. CheckAvailability — sync formatter: post-filter runtime, filter by platform, top 5 by rating
+// Pre-flight (hand-rolled, deterministic):
+//   1. fetchCountryServices — services list for clarification options + platform ID resolution
+//   2. guardRailCheck       — always first; blocks NSFW / off-topic
+//   3. askClarification     — human-in-the-loop; halts and waits for chip answers
 //
-// Platform resolution: service names from LLM extraction and clarification answers are both
-// matched against the country's service list (from /countries API) to get the correct service id.
+// Agent phase (LangChain AgentExecutor):
+//   4. AgentExecutor with findAvailableContent tool
+//      — agent extracts intent, calls tool, generates narrative response
+//      — tool: searchContent → checkAvailability → returns AvailableTitle[] JSON
+//   5. Stream results via NDJSON events (cards + message)
+//
+// Chat history from body.history is wired via MessagesPlaceholder for multi-turn context.
 
 import type { VercelResponse } from '@vercel/node';
+import { AgentExecutor, createToolCallingAgent } from 'langchain/agents';
+import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
+import { HumanMessage, AIMessage } from '@langchain/core/messages';
 import { guardRailCheck } from './tools/guardRailCheck';
 import { askClarification } from './tools/askClarification';
-import { searchContent } from './tools/searchContent';
-import { checkAvailability } from './tools/checkAvailability';
 import { fetchCountryServices } from './tools/countryServices';
-import { buildSearchFilters } from './filters';
-import type { ServiceOption } from './tools/countryServices';
-import type { AgentEvent, AgentRequestBody } from '../../shared/types';
+import { makeSearchTool } from './tools/searchTool';
+import { getAgentLLM } from './llm';
+import { buildAgentSystemPrompt } from './systemPrompt';
+import type { AvailableTitle, AgentEvent, AgentRequestBody } from '../../shared/types';
 
 const REFUSAL =
   "I can only help with finding movies and shows. What would you like to watch?";
 
-const NO_RESULTS =
-  "Nothing found on your platforms for that. Try widening the search or adding more platforms.";
-
 function emit(res: VercelResponse, event: AgentEvent) {
   res.write(JSON.stringify(event) + '\n');
-}
-
-// Match platform names (from LLM extraction or clarification answers) to service IDs
-// using the country's service list. Falls back to lowercase of the name if no match found.
-function resolveToServiceIds(names: string[], services: ServiceOption[]): string[] {
-  const resolved = names
-    .map((name) => {
-      const lower = name.toLowerCase();
-      return (
-        services.find(
-          (s) => s.name.toLowerCase() === lower || s.id.toLowerCase() === lower
-        )?.id ?? null
-      );
-    })
-    .filter((id): id is string => id !== null);
-  return [...new Set(resolved)];
-}
-
-// Check all clarification answer values against the service list to pick up platform selections
-function platformsFromAnswers(
-  answers: Record<string, string[]>,
-  services: ServiceOption[]
-): string[] {
-  return resolveToServiceIds(Object.values(answers).flat(), services);
 }
 
 export async function runOrchestrator(
@@ -62,64 +40,100 @@ export async function runOrchestrator(
     message,
     clarificationAnswers, // undefined = first request; {} = user submitted chips (even if empty)
     country = 'US',
+    history = [],
   } = body;
 
   try {
     // ── Fetch country services ───────────────────────────────────────────
-    // Used for: (a) platform chip options in clarification, (b) name→id resolution
     const services = await fetchCountryServices(country).catch(() => []);
 
-    // ── Step 1: GuardRailCheck ───────────────────────────────────────────
+    // ── Pre-flight 1: GuardRailCheck ─────────────────────────────────────
     emit(res, { type: 'status', payload: 'Checking request…' });
 
     const guard = await guardRailCheck({ message });
-
     if (!guard.allowed) {
       emit(res, { type: 'message', payload: REFUSAL });
       return;
     }
 
-    // ── Step 2: AskClarification (skip if user already submitted chip answers) ──
-    // clarificationAnswers === undefined means first request; any object (even {}) means
-    // the user has already seen and submitted the clarification step — proceed to search.
+    // ── Pre-flight 2: AskClarification ───────────────────────────────────
+    // clarificationAnswers === undefined means first request.
+    // Any object (even {}) means the user already submitted chips — skip to search.
     if (clarificationAnswers === undefined) {
       emit(res, { type: 'status', payload: 'Preparing questions…' });
 
       const { questions } = await askClarification({ prompt: message, services });
-
       if (questions.length > 0) {
         emit(res, { type: 'questions', payload: questions });
         return; // client re-POSTs with clarificationAnswers to continue
       }
     }
 
-    // ── Step 3: SearchContent ────────────────────────────────────────────
+    // ── Agent phase ───────────────────────────────────────────────────────
     emit(res, { type: 'status', payload: 'Searching for content…' });
 
     const answers = clarificationAnswers ?? {};
+    const currentYear = new Date().getFullYear();
 
-    const { runtimeMin, runtimeMax, platforms: llmPlatformNames, ...searchFilters } =
-      await buildSearchFilters(message, answers);
+    // Build the human input: original message + clarification answers appended
+    const inputText = Object.keys(answers).length > 0
+      ? `${message}\n\nUser selected:\n${
+          Object.entries(answers)
+            .map(([q, a]) => `${q}: ${a.join(', ')}`)
+            .join('\n')
+        }`
+      : message;
 
-    // Resolve platform names → service IDs from both LLM extraction and clarification answers
-    const platforms = [
-      ...resolveToServiceIds(llmPlatformNames ?? [], services),
-      ...platformsFromAnswers(answers, services),
-    ].filter((id, i, arr) => arr.indexOf(id) === i); // deduplicate
+    // Build chat history from body.history for multi-turn context
+    const chatHistory = history.flatMap((msg) =>
+      msg.role === 'user'
+        ? [new HumanMessage(msg.content)]
+        : [new AIMessage(msg.content)]
+    );
 
-    console.log('[Orchestrator] resolved platforms:', platforms);
+    const searchTool = makeSearchTool(country, services);
 
-    const results = await searchContent({ ...searchFilters, country, platforms });
+    const prompt = ChatPromptTemplate.fromMessages([
+      ['system', buildAgentSystemPrompt(country, services, currentYear, answers)],
+      new MessagesPlaceholder('chat_history'),
+      ['human', '{input}'],
+      new MessagesPlaceholder('agent_scratchpad'),
+    ]);
 
-    // ── Step 4: CheckAvailability (sync formatter) ───────────────────────
-    const available = checkAvailability({ results, country, platforms, runtimeMin, runtimeMax });
+    const agent = createToolCallingAgent({
+      llm: getAgentLLM(),
+      tools: [searchTool],
+      prompt,
+    });
 
-    if (!available.length) {
-      emit(res, { type: 'message', payload: NO_RESULTS });
-      return;
+    const executor = new AgentExecutor({ agent, tools: [searchTool] });
+
+    // Stream events — intercept tool output for cards, final output for message
+    let cardsEmitted = false;
+
+    const stream = executor.streamEvents(
+      { input: inputText, chat_history: chatHistory },
+      { version: 'v2' }
+    );
+
+    for await (const event of stream) {
+      if (event.event === 'on_tool_end' && event.name === 'findAvailableContent') {
+        const cards = JSON.parse(event.data.output as string) as AvailableTitle[];
+        if (cards.length > 0) {
+          emit(res, { type: 'cards', payload: cards });
+          cardsEmitted = true;
+        }
+      }
+
+      if (event.event === 'on_chain_end' && event.name === 'AgentExecutor') {
+        const output = event.data.output;
+        if (typeof output === 'string' && output.trim()) {
+          emit(res, { type: 'message', payload: output.trim() });
+        } else if (!cardsEmitted) {
+          emit(res, { type: 'message', payload: "Nothing found for that. Try widening the search or swapping platforms." });
+        }
+      }
     }
-
-    emit(res, { type: 'cards', payload: available });
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
