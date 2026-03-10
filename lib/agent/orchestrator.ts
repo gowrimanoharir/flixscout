@@ -105,7 +105,7 @@ export async function runOrchestrator(
     ]);
 
     const agent = createToolCallingAgent({ llm: getAgentLLM(), tools, prompt });
-    const executor = new AgentExecutor({ agent, tools });
+    const executor = new AgentExecutor({ agent, tools, maxIterations: 5 });
 
     // findAvailableContent results are accumulated across multiple calls (e.g. movie + tv)
     // and deduplicated by imdbId. filterResults replaces the accumulated set.

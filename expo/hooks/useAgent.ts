@@ -57,7 +57,7 @@ export function useAgent(country?: string) {
     }
 
     setIsLoading(true);
-    setStatusText(null);
+    setStatusText('Thinking…');
 
     try {
       const res = await fetch('/api/agent', {
@@ -113,6 +113,7 @@ export function useAgent(country?: string) {
   }
 
   function submitClarification(answers: Record<string, string[]>) {
+    if (!pendingMessageRef.current) return;
     const summary = Object.values(answers).flat().filter(Boolean).join(' · ');
     setItems(prev => {
       const withoutChips = prev.filter(item => item.kind !== 'clarification');

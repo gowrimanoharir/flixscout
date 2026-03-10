@@ -22,8 +22,8 @@ export function LoadingShimmer({ statusText }: Props) {
   useEffect(() => {
     shimmer.value = withRepeat(
       withSequence(
-        withTiming(0.65, { duration: 900, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0.25, { duration: 900, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.9, { duration: 900, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.2, { duration: 900, easing: Easing.inOut(Easing.ease) }),
       ),
       -1,
       false,
@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
   shimmerLine: {
     height: 9,
     borderRadius: 4,
-    backgroundColor: colors.surface3,
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
   statusRow: {
     flexDirection: 'row',

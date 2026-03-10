@@ -26,22 +26,22 @@ function resolveToServiceIds(names: string[], services: ServiceOption[]): string
 }
 
 const findAvailableContentSchema = z.object({
-  keyword: z.string().optional().describe(
+  keyword: z.string().nullish().describe(
     'Word or phrase that appears in a title or description (e.g. "zombie", "heist"). Omit if the request is fully captured by other fields.'
   ),
   type: z.enum(['movie', 'tv']).describe('Content type: movie or tv series'),
-  genres: z.array(z.string()).optional().describe(
+  genres: z.array(z.string()).nullish().describe(
     'Genre slugs. Valid values: action, adventure, animation, comedy, crime, documentary, drama, fantasy, history, horror, music, mystery, romance, science-fiction, sport, thriller, war, western'
   ),
-  language: z.string().optional().describe(
+  language: z.string().nullish().describe(
     'ISO 639-1 original language code (e.g. "fr" for French, "ko" for Korean). Omit for multilingual countries.'
   ),
-  minRating: z.number().optional().describe('Minimum IMDb rating (0–10 scale)'),
-  yearFrom: z.number().optional().describe('Earliest release year'),
-  yearTo: z.number().optional().describe('Latest release year'),
-  runtimeMin: z.number().optional().describe('Minimum runtime in minutes'),
-  runtimeMax: z.number().optional().describe('Maximum runtime in minutes'),
-  platforms: z.array(z.string()).optional().describe(
+  minRating: z.number().nullish().describe('Minimum IMDb rating (0–10 scale)'),
+  yearFrom: z.number().nullish().describe('Earliest release year'),
+  yearTo: z.number().nullish().describe('Latest release year'),
+  runtimeMin: z.number().nullish().describe('Minimum runtime in minutes'),
+  runtimeMax: z.number().nullish().describe('Maximum runtime in minutes'),
+  platforms: z.array(z.string()).nullish().describe(
     'Service names as mentioned by the user (e.g. "Netflix", "Prime Video"). System resolves to IDs.'
   ),
 });
@@ -53,13 +53,13 @@ export function makeSearchTool(country: string, services: ServiceOption[]) {
       console.log('[SearchTool] resolved platforms:', resolvedPlatforms);
 
       const results = await searchContent({
-        keyword: input.keyword,
+        keyword: input.keyword ?? undefined,
         type: input.type,
-        genres: input.genres,
-        language: input.language,
-        minRating: input.minRating,
-        yearFrom: input.yearFrom,
-        yearTo: input.yearTo,
+        genres: input.genres ?? undefined,
+        language: input.language ?? undefined,
+        minRating: input.minRating ?? undefined,
+        yearFrom: input.yearFrom ?? undefined,
+        yearTo: input.yearTo ?? undefined,
         country,
         platforms: resolvedPlatforms,
       });
@@ -68,8 +68,8 @@ export function makeSearchTool(country: string, services: ServiceOption[]) {
         results,
         country,
         platforms: resolvedPlatforms,
-        runtimeMin: input.runtimeMin,
-        runtimeMax: input.runtimeMax,
+        runtimeMin: input.runtimeMin ?? undefined,
+        runtimeMax: input.runtimeMax ?? undefined,
       });
 
       return JSON.stringify(available);
