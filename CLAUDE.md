@@ -70,7 +70,7 @@ The client **never** calls the Streaming Availability API directly. All keys are
 | `tools/searchContent.ts` | Streaming Availability `/shows/search/filters` HTTP call |
 | `tools/checkAvailability.ts` | Sync formatter: prefer subscription/free, add-ons fill remaining slots, top 5 by rating |
 | `tools/searchTool.ts` | `makeSearchTool(country, services)` — LangChain `DynamicStructuredTool` wrapping searchContent + checkAvailability; agent fills search params directly |
-| `tools/filterResults.ts` | `makeFilterTool()` — LangChain tool; LLM post-filters API-returned titles by tone/mood/age; only called when API params are insufficient |
+| `tools/filterResults.ts` | `makeFilterTool(getResults)` — LangChain tool; agent passes only `criteria` string; tool reads titles from `getResults()` closure (pendingCards); inner LLM selects indices; only called when API params are insufficient |
 | `tools/countryServices.ts` | Fetches streaming services list for a country from /countries |
 
 **Prompt architecture:**
@@ -102,7 +102,8 @@ The client **never** calls the Streaming Availability API directly. All keys are
 
 **filterResults behaviour:**
 - Agent calls it only when user specifies criteria the API cannot handle (mood, tone, age, sensitivity)
-- LLM evaluates each title's overview + genres — cannot add titles not in the input list
+- Agent passes only a `criteria` string — titles are injected via `getResults()` closure from orchestrator's `pendingCards`
+- Inner LLM evaluates each title's overview + genres and returns selected indices — cannot add titles not in the list
 - Falls back to full list if filter would remove everything
 
 **Guardrail rule:** Agent may only surface titles returned by `checkAvailability` / `filterResults`. Zero hallucination.
