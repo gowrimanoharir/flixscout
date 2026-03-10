@@ -30,14 +30,17 @@ npm test               # jest
 ```
 Expo app → POST /api/agent { message, clarificationAnswers?, history?, country? }
 
-  PRE-FLIGHT (hand-rolled, deterministic):
+  STAGE 1 (always):
   → fetchCountryServices  — Streaming Availability /countries; used for chip options + platform ID resolution
-  → guardRailCheck        — Claude ALLOW/BLOCK classifier; always runs first
-  → askClarification      — skipped when clarificationAnswers is present (even {})
-      └─ if questions returned → emit { type: "questions" }, halt; client re-POSTs with answers
+  → guardRailCheck        — history-aware ALLOW/BLOCK classifier; always runs first; fails open
 
-  AGENT PHASE (LangChain AgentExecutor + createToolCallingAgent):
-  → AgentExecutor (claude-sonnet-4-6, 4096 tokens)
+  STAGE 2 (IntentAgent — skipped when clarificationAnswers is present):
+  → IntentAgent (claude-sonnet-4-6, 1024 tokens, maxIterations:2)
+      └─ askClarification tool — if called → emit { type: "questions" }, halt; client re-POSTs with answers
+      └─ "READY" output (no tool call) → proceed to Stage 3
+
+  STAGE 3 (SearchAgent):
+  → SearchAgent (claude-sonnet-4-6, 4096 tokens, maxIterations:5)
       ├─ findAvailableContent  — always called once; all platforms combined in one call
       │     └─ searchContent (Streaming Availability /shows/search/filters)
       │     └─ checkAvailability (sync formatter — subscription/free first, add-ons fill remaining slots, top 5)
@@ -61,26 +64,29 @@ The client **never** calls the Streaming Availability API directly. All keys are
 
 | File | Role |
 |---|---|
-| `orchestrator.ts` | Pre-flight gates + AgentExecutor wiring; NDJSON emission |
-| `llm.ts` | `getLLM()` (1024 tokens, pre-flight) · `getAgentLLM()` (4096 tokens, agent phase) |
-| `systemPrompt.ts` | `SYSTEM_PROMPT` · `INTENT_EXTRACTION_PROMPT` · `buildAgentSystemPrompt()` |
+| `orchestrator.ts` | 3-stage supervisor: guardRailCheck → IntentAgent → SearchAgent; NDJSON emission |
+| `intentAgent.ts` | `makeIntentAgent(country, services, year)` — AgentExecutor; decides clarify vs search |
+| `searchAgent.ts` | `makeSearchAgent(country, services, year, answers)` — AgentExecutor; returns `SearchAgentHandle` |
+| `llm.ts` | `getLLM()` (1024 tokens, IntentAgent) · `getAgentLLM()` (4096 tokens, SearchAgent) |
+| `systemPrompt.ts` | `SYSTEM_PROMPT` · `buildAgentSystemPrompt()` · `buildIntentSystemPrompt()` |
 | `utils.ts` | `extractJson()` — strips fences, finds outermost `{…}` block |
-| `tools/guardRailCheck.ts` | Claude ALLOW/BLOCK classifier — direct call, not an agent tool |
-| `tools/askClarification.ts` | Generates clarification chips — direct call, not an agent tool |
+| `tools/guardRailCheck.ts` | History-aware ALLOW/BLOCK classifier — direct call; fails open |
+| `tools/askClarification.ts` | Legacy pre-flight (kept for reference; no longer called by orchestrator) |
+| `tools/askClarificationTool.ts` | LangChain tool used by IntentAgent to emit clarifying questions |
 | `tools/searchContent.ts` | Streaming Availability `/shows/search/filters` HTTP call |
 | `tools/checkAvailability.ts` | Sync formatter: prefer subscription/free, add-ons fill remaining slots, top 5 by rating |
-| `tools/searchTool.ts` | `makeSearchTool(country, services)` — LangChain `DynamicStructuredTool` wrapping searchContent + checkAvailability; agent fills search params directly |
-| `tools/filterResults.ts` | `makeFilterTool(getResults)` — LangChain tool; agent passes only `criteria` string; tool reads titles from `getResults()` closure (pendingCards); inner LLM selects indices; only called when API params are insufficient |
+| `tools/searchTool.ts` | `makeSearchTool(country, services)` — LangChain tool wrapping searchContent + checkAvailability |
+| `tools/filterResults.ts` | `makeFilterTool(getResults)` — LangChain tool; agent passes only `criteria`; titles injected via closure |
 | `tools/countryServices.ts` | Fetches streaming services list for a country from /countries |
 
 **Prompt architecture:**
 
 | Prompt | Location | Used by | Purpose |
 |---|---|---|---|
-| `SYSTEM_PROMPT` | `systemPrompt.ts` | `askClarification` | FlixScout identity, tone, rules |
-| `INTENT_EXTRACTION_PROMPT` | `systemPrompt.ts` | _(reference only — agent LLM replaces this)_ | Legacy standalone JSON extractor |
-| `buildAgentSystemPrompt()` | `systemPrompt.ts` | `orchestrator` → AgentExecutor | FlixScout identity + search rules + tool usage instructions + current year + services + clarification answers |
-| `CLASSIFIER_SYSTEM` | `guardRailCheck.ts` | `guardRailCheck` | Self-contained ALLOW/BLOCK classifier |
+| `SYSTEM_PROMPT` | `systemPrompt.ts` | base for `buildAgentSystemPrompt` | FlixScout identity, tone, rules |
+| `buildIntentSystemPrompt()` | `systemPrompt.ts` | IntentAgent | Output "READY" or call askClarification |
+| `buildAgentSystemPrompt()` | `systemPrompt.ts` | SearchAgent | FlixScout identity + search rules + tool instructions + year + services + answers |
+| `CLASSIFIER_SYSTEM` | `guardRailCheck.ts` | `guardRailCheck` | Self-contained ALLOW/BLOCK classifier; explicitly allows refinement follow-ups |
 | `FILTER_SYSTEM` | `filterResults.ts` | `filterResults` tool | Instructs LLM to select indices from provided title list |
 
 **Platform resolution:**
@@ -90,10 +96,10 @@ The client **never** calls the Streaming Availability API directly. All keys are
 - Agent LLM extracts service names as-mentioned; tool matches to API `service.id`
 
 **Clarification flow:**
-- `clarificationAnswers === undefined` → first request, run `askClarification`
-- `clarificationAnswers` is any object (even `{}`) → user submitted chips, skip to search
+- `clarificationAnswers === undefined` → first request, run IntentAgent; it may call `askClarification` tool (questions emitted, halt) or output "READY" (proceed)
+- `clarificationAnswers` is any object (even `{}`) → user submitted chips, skip IntentAgent, go straight to SearchAgent
 - Submitting with no selections is valid and proceeds to search
-- Clarification answers are appended to the human input message for the AgentExecutor
+- Clarification answers are appended to the human input message for the SearchAgent
 
 **checkAvailability sorting:**
 - Subscription/free titles sorted first by IMDb rating
@@ -101,8 +107,8 @@ The client **never** calls the Streaming Availability API directly. All keys are
 - Rent/buy options are never surfaced
 
 **filterResults behaviour:**
-- Agent calls it only when user specifies criteria the API cannot handle (mood, tone, age, sensitivity)
-- Agent passes only a `criteria` string — titles are injected via `getResults()` closure from orchestrator's `pendingCards`
+- SearchAgent calls it only when user specifies criteria the API cannot handle (mood, tone, age, sensitivity)
+- Agent passes only a `criteria` string — titles are injected via `getResults()` closure from `SearchAgentHandle.pendingCards`
 - Inner LLM evaluates each title's overview + genres and returns selected indices — cannot add titles not in the list
 - Falls back to full list if filter would remove everything
 
@@ -152,6 +158,7 @@ Build phases in order — do not skip ahead without confirmation:
 6b. ✅ Input + useAgent streaming hook + real LLM (guardrail blocked message + clarification chips)
 6c. ✅ Search + availability APIs connected — RecommendationCard + no-results + loading shimmer
 6d. ✅ LangChain AgentExecutor refactor + filterResults tool
-7. Session persistence
+6e. ✅ Multi-agent refactor — IntentAgent + SearchAgent; history-aware guardrail
+7. ✅ Session persistence
 8. Guardrail tests
 9. Vercel deployment config + README

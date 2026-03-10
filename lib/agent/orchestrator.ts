@@ -1,31 +1,20 @@
-// Agent orchestration
+// Orchestrator — supervisor that sequences the three pipeline stages.
 //
-// Pre-flight (hand-rolled, deterministic):
-//   1. fetchCountryServices — services list for clarification options + platform ID resolution
-//   2. guardRailCheck       — always first; blocks NSFW / off-topic
-//   3. askClarification     — human-in-the-loop; halts and waits for chip answers
+// Stage 1 (always):   guardRailCheck  — blocks NSFW / off-topic; history-aware
+// Stage 2 (optional): IntentAgent     — decides clarify vs search; emits questions and halts,
+//                                       or outputs "READY" to continue
+// Stage 3:            SearchAgent     — finds content and writes assistant reply
 //
-// Agent phase (LangChain AgentExecutor):
-//   4. AgentExecutor with two tools:
-//      - findAvailableContent: searchContent → checkAvailability → AvailableTitle[] JSON
-//      - filterResults (optional): LLM post-filter for criteria the API cannot express
-//        (mood, tone, age-appropriateness, maturity). Only called when needed.
-//   5. Cards emitted at chain end using the last tool output (filtered if filterResults ran)
-//
-// Chat history from body.history is wired via MessagesPlaceholder for multi-turn context.
+// clarificationAnswers === undefined → first request; run IntentAgent
+// clarificationAnswers any object    → user submitted chips; skip to SearchAgent
 
 import type { VercelResponse } from '@vercel/node';
-import { AgentExecutor, createToolCallingAgent } from 'langchain/agents';
-import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
 import { HumanMessage, AIMessage } from '@langchain/core/messages';
 import { guardRailCheck } from './tools/guardRailCheck';
-import { askClarification } from './tools/askClarification';
 import { fetchCountryServices } from './tools/countryServices';
-import { makeSearchTool } from './tools/searchTool';
-import { makeFilterTool } from './tools/filterResults';
-import { getAgentLLM } from './llm';
-import { buildAgentSystemPrompt } from './systemPrompt';
-import type { AvailableTitle, AgentEvent, AgentRequestBody } from '../../shared/types';
+import { makeIntentAgent } from './intentAgent';
+import { makeSearchAgent } from './searchAgent';
+import type { AvailableTitle, AgentEvent, AgentRequestBody, ClarificationQuestion } from '../../shared/types';
 
 const REFUSAL =
   "I can only help with finding movies and shows. What would you like to watch?";
@@ -49,33 +38,55 @@ export async function runOrchestrator(
     // ── Fetch country services ───────────────────────────────────────────
     const services = await fetchCountryServices(country).catch(() => []);
 
-    // ── Pre-flight 1: GuardRailCheck ─────────────────────────────────────
+    // ── Stage 1: GuardRailCheck (history-aware) ──────────────────────────
     emit(res, { type: 'status', payload: 'Checking request…' });
 
-    const guard = await guardRailCheck({ message });
+    const guard = await guardRailCheck({ message }, history);
     if (!guard.allowed) {
       emit(res, { type: 'message', payload: REFUSAL });
       return;
     }
 
-    // ── Pre-flight 2: AskClarification ───────────────────────────────────
-    // clarificationAnswers === undefined means first request.
-    // Any object (even {}) means the user already submitted chips — skip to search.
-    if (clarificationAnswers === undefined) {
-      emit(res, { type: 'status', payload: 'Preparing questions…' });
+    // Build chat history for agent context
+    const chatHistory = history.flatMap((msg) =>
+      msg.role === 'user'
+        ? [new HumanMessage(msg.content)]
+        : [new AIMessage(msg.content)]
+    );
 
-      const { questions } = await askClarification({ prompt: message, services });
-      if (questions.length > 0) {
-        emit(res, { type: 'questions', payload: questions });
-        return; // client re-POSTs with clarificationAnswers to continue
+    const currentYear = new Date().getFullYear();
+
+    // ── Stage 2: IntentAgent (clarify or proceed) ────────────────────────
+    // Skip when clarificationAnswers is present — user already answered chips
+    if (clarificationAnswers === undefined) {
+      emit(res, { type: 'status', payload: 'Thinking…' });
+
+      const intentAgent = makeIntentAgent(country, services, currentYear);
+      const intentStream = intentAgent.streamEvents(
+        { input: message, chat_history: chatHistory },
+        { version: 'v2' }
+      );
+
+      let questionsEmitted = false;
+      for await (const event of intentStream) {
+        if (event.event === 'on_tool_end' && event.name === 'askClarification') {
+          try {
+            const questions = JSON.parse(event.data.output as string) as ClarificationQuestion[];
+            if (Array.isArray(questions) && questions.length > 0) {
+              emit(res, { type: 'questions', payload: questions });
+              questionsEmitted = true;
+            }
+          } catch { /* ignore parse errors */ }
+        }
       }
+
+      if (questionsEmitted) return; // client re-POSTs with clarificationAnswers
     }
 
-    // ── Agent phase ───────────────────────────────────────────────────────
+    // ── Stage 3: SearchAgent ─────────────────────────────────────────────
     emit(res, { type: 'status', payload: 'Searching for content…' });
 
     const answers = clarificationAnswers ?? {};
-    const currentYear = new Date().getFullYear();
 
     // Build the human input: original message + clarification answers appended
     const inputText = Object.keys(answers).length > 0
@@ -86,33 +97,8 @@ export async function runOrchestrator(
         }`
       : message;
 
-    // Build chat history from body.history for multi-turn context
-    const chatHistory = history.flatMap((msg) =>
-      msg.role === 'user'
-        ? [new HumanMessage(msg.content)]
-        : [new AIMessage(msg.content)]
-    );
-
-    // findAvailableContent results are accumulated across multiple calls (e.g. movie + tv)
-    // and deduplicated by imdbId. filterResults replaces the accumulated set.
-    // Declared before makeFilterTool so the closure captures the live variable.
-    let pendingCards: AvailableTitle[] = [];
-
-    const searchTool = makeSearchTool(country, services);
-    const filterTool = makeFilterTool(() => pendingCards);
-    const tools = [searchTool, filterTool];
-
-    const prompt = ChatPromptTemplate.fromMessages([
-      ['system', buildAgentSystemPrompt(country, services, currentYear, answers)],
-      new MessagesPlaceholder('chat_history'),
-      ['human', '{input}'],
-      new MessagesPlaceholder('agent_scratchpad'),
-    ]);
-
-    const agent = createToolCallingAgent({ llm: getAgentLLM(), tools, prompt });
-    const executor = new AgentExecutor({ agent, tools, maxIterations: 5 });
-
-    const stream = executor.streamEvents(
+    const searchHandle = makeSearchAgent(country, services, currentYear, answers);
+    const stream = searchHandle.executor.streamEvents(
       { input: inputText, chat_history: chatHistory },
       { version: 'v2' }
     );
@@ -130,8 +116,7 @@ export async function runOrchestrator(
         try {
           const parsed = JSON.parse(event.data.output as string) as AvailableTitle[];
           if (Array.isArray(parsed) && parsed.length > 0) {
-            const seen = new Set(pendingCards.map((c) => c.imdbId));
-            pendingCards = [...pendingCards, ...parsed.filter((c) => !seen.has(c.imdbId))];
+            searchHandle.accumulateCards(parsed);
           }
         } catch { /* ignore parse errors */ }
       }
@@ -139,19 +124,20 @@ export async function runOrchestrator(
       if (event.event === 'on_tool_end' && event.name === 'filterResults') {
         try {
           const parsed = JSON.parse(event.data.output as string) as AvailableTitle[];
-          if (Array.isArray(parsed)) pendingCards = parsed; // filtered set replaces accumulated
+          if (Array.isArray(parsed)) searchHandle.replaceCards(parsed);
         } catch { /* ignore parse errors */ }
       }
 
       if (event.event === 'on_chain_end' && event.name === 'AgentExecutor') {
-        if (pendingCards.length > 0) {
-          emit(res, { type: 'cards', payload: pendingCards });
+        const cards = searchHandle.getPendingCards();
+        if (cards.length > 0) {
+          emit(res, { type: 'cards', payload: cards });
         }
 
         const output = event.data.output;
         if (typeof output === 'string' && output.trim()) {
           emit(res, { type: 'message', payload: output.trim() });
-        } else if (!pendingCards.length) {
+        } else if (!cards.length) {
           emit(res, { type: 'message', payload: "Nothing found for that. Try widening the search or swapping platforms." });
         }
       }

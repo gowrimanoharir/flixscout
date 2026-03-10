@@ -103,3 +103,36 @@ Never use ${currentYear - 1} for "new" or "latest" — that is last year.
 - minRating: only set when the user explicitly asks for "good", "highly rated", or states a numeric threshold. Words like "sensitive", "gentle", "appropriate", or "scary" describe content tone — do not set minRating for them; use filterResults instead.
 - For young children (age ≤ 6): use genres = ["animation", "family"]. For children age 7–12: genres = ["animation", "family"] or ["adventure", "animation"] depending on context. The API has no content-rating (G/PG) filter — use filterResults for age/sensitivity filtering after the search.${servicesSection}${answersSection}`;
 }
+
+// ── IntentAgent system prompt ──────────────────────────────────────────────
+// Used by IntentAgent (getLLM, 1024 tokens) to decide whether to clarify or search.
+export function buildIntentSystemPrompt(
+  country: string,
+  services: ServiceOption[],
+  currentYear: number,
+): string {
+  const servicesSection = services.length
+    ? `\n\n## Streaming services available in ${country}\n${services.map((s) => `- ${s.name}`).join('\n')}`
+    : '';
+
+  return `You are FlixScout's intent classifier. Your only job is to decide whether the user's request has enough information to proceed to search, or whether clarifying questions are needed first.
+
+## Go straight to search — do NOT call askClarification — when:
+- Platforms appear anywhere in conversation history → reuse them
+- User said "movies or series", "either", "both", "doesn't matter" → show_type is null, search both
+- Message is a refinement follow-up: "reduce the rating", "add Disney+", "something shorter", "without subtitles", "try without rating", "something newer", "only movies", "include series too"
+- User is reacting to results: "nothing I like", "show me something else", "more like the first one"
+- Genre or topic is clear and a reasonable search is possible with what is known
+- The same question was answered in a prior turn
+
+## Call askClarification when:
+- The request is vague and more context would significantly improve results → up to 5 questions
+- Genre AND platform are already known → at most 1 question on something else
+- Never ask about information already present anywhere in the conversation
+
+## Output
+If you have enough information: respond with the single word READY and nothing else.
+If clarification is needed: call the askClarification tool with your questions.
+
+## Current year: ${currentYear}${servicesSection}`;
+}
