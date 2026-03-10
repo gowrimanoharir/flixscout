@@ -37,7 +37,7 @@ const findAvailableContentSchema = z.object({
     (v) => typeof v === 'string' ? v.split(',').map((s: string) => s.trim()).filter(Boolean) : v,
     z.array(z.string()).nullish()
   ).describe(
-    'Genre slugs. Valid values: action, adventure, animation, comedy, crime, documentary, drama, fantasy, history, horror, music, mystery, romance, science-fiction, sport, thriller, war, western'
+    'Genre slugs. Valid values: action, adventure, animation, comedy, crime, documentary, drama, family, fantasy, history, horror, music, mystery, romance, scifi, thriller, war, western'
   ),
   language: z.string().nullish().describe(
     'ISO 639-1 original language code (e.g. "fr" for French, "ko" for Korean). Omit for multilingual countries.'
