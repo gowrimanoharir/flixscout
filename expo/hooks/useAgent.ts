@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
-import type { AgentEvent, ClarificationQuestion, AvailableTitle } from '@/shared/types';
+import type { AgentEvent, ClarificationQuestion, AvailableTitle, Message } from '@/shared/types';
+import { useSession } from './useSession';
 
 export type ChatItem =
   | { kind: 'user'; id: string; text: string }
@@ -17,16 +18,21 @@ export function useAgent(country?: string) {
   const [statusText, setStatusText] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const pendingMessageRef = useRef('');
+  const session = useSession();
 
   function handleEvent(event: AgentEvent) {
     switch (event.type) {
       case 'status':
         setStatusText(event.payload as string);
         break;
-      case 'message':
+      case 'message': {
         setStatusText(null);
-        setItems(prev => [...prev, { kind: 'assistant', id: uid(), text: event.payload as string }]);
+        const text = event.payload as string;
+        const id = uid();
+        setItems(prev => [...prev, { kind: 'assistant', id, text }]);
+        session.addMessage({ id, role: 'assistant', content: text, timestamp: Date.now() });
         break;
+      }
       case 'questions':
         setStatusText(null);
         setItems(prev => [...prev, {
@@ -53,7 +59,9 @@ export function useAgent(country?: string) {
   async function send(message: string, clarificationAnswers?: Record<string, string[]>) {
     if (!clarificationAnswers) {
       pendingMessageRef.current = message;
-      setItems(prev => [...prev, { kind: 'user', id: uid(), text: message }]);
+      const id = uid();
+      setItems(prev => [...prev, { kind: 'user', id, text: message }]);
+      session.addMessage({ id, role: 'user', content: message, timestamp: Date.now() });
     }
 
     setIsLoading(true);
@@ -65,7 +73,7 @@ export function useAgent(country?: string) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message,
-          history: [],
+          history: session.messages.slice(-20),
           clarificationAnswers,
           country,
         }),
@@ -124,5 +132,5 @@ export function useAgent(country?: string) {
     send(pendingMessageRef.current, answers);
   }
 
-  return { items, statusText, isLoading, send, submitClarification };
+  return { items, statusText, isLoading, send, submitClarification, clearSession: session.clearSession };
 }

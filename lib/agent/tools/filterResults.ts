@@ -59,7 +59,7 @@ export function makeFilterTool(getResults: () => AvailableTitle[]) {
       try {
         parsed = JSON.parse(extractJson(response.content));
       } catch {
-        return input.results;
+        return JSON.stringify(titles);
       }
 
       const indices = Array.isArray(parsed.selected) ? (parsed.selected as number[]) : [];
