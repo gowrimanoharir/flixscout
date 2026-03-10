@@ -83,7 +83,11 @@ After the tool returns results, write a brief friendly response (2–4 sentences
 If the tool returns an empty list, acknowledge it and suggest one concrete way to widen the search.
 
 ## Current year
-${currentYear} — use this for relative date expressions (e.g. "last 3 years" → yearFrom ${currentYear - 3}, "this year" → yearFrom ${currentYear}).
+${currentYear} — use this for all relative date expressions:
+- "new" / "latest" / "recent" / "just added" / "this year" → yearFrom = ${currentYear}
+- "last 3 years" → yearFrom = ${currentYear - 3}
+- "last month" → yearFrom = ${currentYear}
+Never use ${currentYear - 1} for "new" or "latest" — that is last year.
 
 ## findAvailableContent parameter rules
 - keyword: only set when the user mentions a specific topic, theme, or title fragment that would literally appear in a title or description (e.g. "zombie", "heist", "based on true story"). Never put nationality/origin words (Indian, Korean, French, Bollywood), language names, platform names, release timing, or genre words into keyword. If the request is fully captured by other fields, omit keyword.

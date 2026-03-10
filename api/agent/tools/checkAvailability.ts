@@ -54,7 +54,7 @@ export function checkAvailability(input: CheckAvailabilityInput): AvailableTitle
     console.log('[Availability] filtering for country:', country.toLowerCase(), '| platforms:', platforms);
   }
 
-  const available: Array<AvailableTitle & { _rating: number }> = [];
+  const available: Array<AvailableTitle & { _rating: number; _isAddon: boolean }> = [];
 
   for (const result of results) {
     if (!result.imdbId) continue;
@@ -83,11 +83,16 @@ export function checkAvailability(input: CheckAvailabilityInput): AvailableTitle
       genre: result.genres,
       runtime: result.runtime > 0 ? `${result.runtime} min` : '',
       _rating: result.rating,
+      _isAddon: isAddon,
     });
   }
 
+  // Subscription/free titles first (sorted by rating), add-ons fill remaining slots only
   return available
-    .sort((a, b) => b._rating - a._rating)
+    .sort((a, b) => {
+      if (a._isAddon !== b._isAddon) return a._isAddon ? 1 : -1;
+      return b._rating - a._rating;
+    })
     .slice(0, 5)
-    .map(({ _rating, ...title }) => title);
+    .map(({ _rating, _isAddon, ...title }) => title);
 }
