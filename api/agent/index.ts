@@ -2,7 +2,7 @@
 // HTTP layer only: parse, validate, set up NDJSON stream, delegate to orchestrator
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { runOrchestrator } from './orchestrator';
+import { runOrchestrator } from '../../lib/agent/orchestrator';
 import type { AgentRequestBody } from '../../shared/types';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

@@ -17,7 +17,7 @@
         "expo/theme/*"
       ],
       "@/agent/*": [
-        "api/agent/*"
+        "lib/agent/*"
       ],
       "@/shared/*": [
         "shared/*"
@@ -27,6 +27,7 @@
   "include": [
     "expo/**/*",
     "api/**/*",
+    "lib/**/*",
     "shared/**/*",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
