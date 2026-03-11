@@ -144,7 +144,7 @@ export async function runOrchestrator(
     }
 
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
-    emit(res, { type: 'error', payload: msg });
+    console.error('[Orchestrator error]', err);
+    emit(res, { type: 'error', payload: 'Something went wrong. Please try again.' });
   }
 }

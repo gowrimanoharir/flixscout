@@ -80,7 +80,8 @@ export function useAgent(country?: string) {
       });
 
       if (!res.ok || !res.body) {
-        throw new Error(`Server error (${res.status}). Please try again.`);
+        console.error('[Agent fetch error]', res.status, res.statusText);
+        throw new Error('Something went wrong. Please try again.');
       }
 
       const reader = res.body.getReader();
@@ -112,8 +113,8 @@ export function useAgent(country?: string) {
         } catch { /* skip */ }
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
-      setItems(prev => [...prev, { kind: 'error', id: uid(), text: msg }]);
+      console.error('[Agent error]', err);
+      setItems(prev => [...prev, { kind: 'error', id: uid(), text: 'Something went wrong. Please try again.' }]);
     } finally {
       setIsLoading(false);
       setStatusText(null);
