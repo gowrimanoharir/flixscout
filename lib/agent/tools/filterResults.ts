@@ -28,8 +28,10 @@ Return ONLY valid JSON — no markdown, no extra text:
 Rules:
 - Indices are 1-based, matching the numbered list
 - Order selected indices by best fit first
-- Only exclude a title if it clearly does NOT match the criteria based on its overview or genres
-- If a title's overview is missing or ambiguous, include it (do not exclude on uncertainty)
+- Default: include a title only if its overview, genres, or title provide positive evidence it matches the criteria. The type-specific rules below override this default.
+- Setting/location criteria — words describing a physical place or environment (e.g. "tropical", "beach", "set in France", "rural", "outer space"): include only if the overview explicitly mentions or strongly implies that setting. If the overview is missing or empty, include the title (cannot exclude on missing data for location).
+- Mood/tone/age criteria — words describing emotional quality, atmosphere, or suitability (e.g. "uplifting", "not scary", "for children", "cozy", "dark", "intense"): include unless the overview clearly contradicts it. If the overview is missing or empty, include if genres are broadly consistent.
+- Compound criteria: identify each term as a setting/location word or a mood/tone word using the definitions above, then apply the matching rule to each term. A title must satisfy all terms to be included.
 - Never introduce or infer titles that were not in the input list`;
 
 export function makeFilterTool(getResults: () => AvailableTitle[]) {

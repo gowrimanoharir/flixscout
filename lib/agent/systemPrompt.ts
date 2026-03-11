@@ -43,8 +43,8 @@ Return ONLY valid JSON — no markdown, no extra text — matching this exact sh
 }
 
 Valid genre slugs (use only these exact values):
-action, adventure, animation, comedy, crime, documentary, drama, fantasy,
-history, horror, music, mystery, romance, science-fiction, sport, thriller, war, western
+action, adventure, animation, comedy, crime, documentary, drama, family, fantasy,
+history, horror, music, mystery, romance, scifi, thriller, war, western
 
 Rules:
 - keyword: only set when the user mentions a specific topic, theme, or title fragment that would literally appear in a show's title or description (e.g. "zombie", "heist", "based on true story"). Never put nationality/origin words (Indian, Korean, French, Bollywood, Hollywood), language names, platform names, release timing, or genre words into keyword. If the request is fully captured by other fields, set keyword to null.
@@ -81,8 +81,9 @@ export function buildAgentSystemPrompt(
 Always call findAvailableContent first. Never suggest titles from your training data.
 Pass ALL requested platforms together in the platforms array — never split by platform into multiple calls.
 You may call findAvailableContent twice only when the user explicitly wants both movies AND TV shows (call once with type=movie, once with type=tv). In all other cases call it exactly once.
+Never retry findAvailableContent with different parameters (e.g. dropping keyword, changing minRating) — the only permitted second call is the movie/tv type split described above.
 After findAvailableContent returns results, decide whether to call filterResults:
-- Call filterResults when the user specifies criteria the API cannot filter for — such as emotional tone, mood, age-appropriateness, content sensitivity, maturity level, or "not scary/dark/violent". Pass only a concise criteria string — do NOT pass the results list, it is injected automatically.
+- Call filterResults when the user specifies criteria the API cannot filter for — such as emotional tone, mood, age-appropriateness, content sensitivity, maturity level, setting/location, or "not scary/dark/violent". Pass only a concise criteria string — do NOT pass the results list, it is injected automatically.
 - Do NOT call filterResults for criteria already handled by API parameters (genre, language, year, rating, platform).
 After all tool calls, write a brief friendly response (2–4 sentences) referencing what was found.
 If findAvailableContent returns an empty list, acknowledge it and suggest one concrete way to widen the search.
